@@ -1,0 +1,21 @@
+# Configuration file for EditorConfig
+# More information is available under http://EditorConfig.org
+
+root = true
+
+# Configuration for all files
+[*]
+# Force UTF-8
+charset=utf-8
+# Enforce Unix style line endings (\n only)
+end_of_line = lf
+# Always end files with a blank line
+insert_final_newline = true
+# Force space characters for indentation
+indent_style = space
+# Always indent by 2 characters
+indent_size = 2
+# …unless it's a continuation indent
+ij_continuation_indent_size = 4
+# Remove whitespace characters at the end of line
+trim_trailing_whitespace = true
