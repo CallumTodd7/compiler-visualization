@@ -1,2 +1,4 @@
-add_executable(compiler_visualization
-  main.cpp)
+add_executable(cv
+    main.cpp
+    Lexer.cpp Lexer.h
+    StreamOverloads.cpp)
