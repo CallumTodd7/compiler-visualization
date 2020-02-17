@@ -26,7 +26,7 @@ std::vector<Token> Lexer::getTokenStream() {
   while (true) {
     Token token = nextToken();
     if (token.type == Token::Type::TOKEN_EOF) break;
-    if (token.type == Token::Type::TOKEN_ERROR) break;
+    if (token.type == Token::Type::TOKEN_ERROR) break; // TODO throw exception instead
     tokens.push_back(token);
   }
 
