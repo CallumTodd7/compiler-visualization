@@ -36,7 +36,15 @@ int main(int argc, char* argv[]) {
   printf("Source: %s\nDestination: %s\n\n", sourceFilepath, destFilepath);
 
   Lexer lexer((std::string(sourceFilepath)));
-  std::vector<Token> tokenStream = lexer.getTokenStream(); // TODO on exception, return non 0 status code
+
+  std::vector<Token> tokenStream;
+  try {
+    tokenStream = lexer.getTokenStream();
+  } catch (std::exception&) {
+    printf("Lexer threw an exception\n");
+    return 1;
+  }
+
   printf("tokenStream length: %lu\n", tokenStream.size());
   for (const Token& token : tokenStream) {
     std::cout << token << std::endl;

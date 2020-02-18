@@ -144,7 +144,7 @@ private:
   void advanceCursor();
   char peekChar(unsigned int positionAheadOfCursor = 1);
 
-  void skipWhitespaceAndComments(const LexerContext& lexerContext);
+  bool skipWhitespaceAndComments(const LexerContext& lexerContext);
   Token readNumber(const LexerContext& lexerContext);
   static Token identifyKeyword(const LexerContext& lexerContext, const std::string& keyword);
   Token readOperator(const LexerContext& lexerContext);

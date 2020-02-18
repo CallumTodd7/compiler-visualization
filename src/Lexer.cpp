@@ -26,7 +26,7 @@ std::vector<Token> Lexer::getTokenStream() {
   while (true) {
     Token token = nextToken();
     if (token.type == Token::Type::TOKEN_EOF) break;
-    if (token.type == Token::Type::TOKEN_ERROR) break; // TODO throw exception instead
+    if (token.type == Token::Type::TOKEN_ERROR) throw std::exception();
     tokens.push_back(token);
   }
 
@@ -45,7 +45,9 @@ Token Lexer::nextToken() {
   LexerContext lexerContext = getContext();
 
   // Skip whitespace and comments
-  skipWhitespaceAndComments(lexerContext);
+  if (!skipWhitespaceAndComments(lexerContext)) {
+    return Token::errorToken(lexerContext);
+  }
 
   // Get new context after skipping whitespace
   lexerContext = getContext();
@@ -86,7 +88,7 @@ Token Lexer::nextToken() {
   return Token::errorToken(lexerContext);
 }
 
-void Lexer::skipWhitespaceAndComments(const LexerContext& lexerContext) {
+bool Lexer::skipWhitespaceAndComments(const LexerContext& lexerContext) {
   while (isWhitespace(currentChar) || (currentChar == '/' && (peekChar() == '/' || peekChar() == '*'))) {
     // - Skip whitespace
     while (isWhitespace(currentChar)) {
@@ -140,7 +142,7 @@ void Lexer::skipWhitespaceAndComments(const LexerContext& lexerContext) {
 
         if (file->fileStream->eof()) {
           std::cout << lexerContext << " Nested comment failed to close before end of file" << std::endl;
-          return;
+          return false;
         }
 
         // Get next char in comment
@@ -148,6 +150,8 @@ void Lexer::skipWhitespaceAndComments(const LexerContext& lexerContext) {
       }
     }
   }
+
+  return true;
 }
 
 Token Lexer::readNumber(const LexerContext& lexerContext) {
