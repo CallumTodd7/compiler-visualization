@@ -96,6 +96,9 @@ std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
     case Token::Type::TOKEN_KEYWORD_RETURN:
       os << "KEYWORD_RETURN";
       break;
+    case Token::Type::TOKEN_KEYWORD_CONTINUE:
+      os << "KEYWORD_CONTINUE";
+      break;
     case Token::Type::TOKEN_KEYWORD_BREAK:
       os << "KEYWORD_BREAK";
       break;
@@ -108,8 +111,8 @@ std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
     case Token::Type::TOKEN_KEYWORD_WHILE:
       os << "KEYWORD_WHILE";
       break;
-    case Token::Type::TOKEN_KEYWORD_PROCEDURE:
-      os << "KEYWORD_PROCEDURE";
+    case Token::Type::TOKEN_KEYWORD_FOR:
+      os << "KEYWORD_FOR";
       break;
     default:
       os << "ERROR_TYPE_HAS_NO_STRING_VALUE";

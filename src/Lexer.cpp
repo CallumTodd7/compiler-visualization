@@ -215,6 +215,8 @@ Token Lexer::identifyKeyword(const LexerContext& lexerContext, const std::string
     return {lexerContext, Token::Type::TOKEN_KEYWORD_VOID};
   } else if (keyword == "return") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_RETURN};
+  } else if (keyword == "continue") {
+    return {lexerContext, Token::Type::TOKEN_KEYWORD_CONTINUE};
   } else if (keyword == "break") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_BREAK};
   } else if (keyword == "if") {
@@ -223,8 +225,8 @@ Token Lexer::identifyKeyword(const LexerContext& lexerContext, const std::string
     return {lexerContext, Token::Type::TOKEN_KEYWORD_ELSE};
   } else if (keyword == "while") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_WHILE};
-  } else if (keyword == "func") {
-    return {lexerContext, Token::Type::TOKEN_KEYWORD_PROCEDURE};
+  } else if (keyword == "for") {
+    return {lexerContext, Token::Type::TOKEN_KEYWORD_FOR};
   }
 
   return Token::errorToken(lexerContext);

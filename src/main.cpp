@@ -6,6 +6,7 @@
 #include <thread>
 #include "Lexer.h"
 #include "ThreadSync.h"
+#include "Parser.h"
 
 struct CliOptions {
   char* sourceFilepath = nullptr;
@@ -39,6 +40,18 @@ void compileWorker() {
   printf("tokenStream length: %lu\n", tokenStream.size());
   for (const Token& token : tokenStream) {
     std::cout << token << std::endl;
+  }
+  threadSync->workerReady();
+
+  Parser parser(tokenStream);
+  try {
+    parser.parse();
+  } catch (std::exception&) {
+    printf("Parser threw an exception\n");
+
+    workerExitCode = 1;
+    threadSync->threadExit();
+    return;
   }
   threadSync->workerReady();
 
