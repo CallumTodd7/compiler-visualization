@@ -27,12 +27,17 @@ enum ASTType {
   // Expressions
 
   BIN_OP,
+  UNARY_OP,
   LITERAL,
   VARIABLE,
 };
+std::ostream& operator<<(std::ostream& os, const ASTType& type);
 
 struct ASTNode {
   ASTType type = ASTType::UNINITIALISED;
+
+  virtual void print(std::ostream& os, unsigned int level) const;
+  friend std::ostream& operator<<(std::ostream& os, const ASTNode& node);
 };
 
 struct ASTStatement : ASTNode {
@@ -43,6 +48,7 @@ struct ASTExpression : ASTNode {
 
 struct ASTBlock : ASTStatement {
   ASTBlock() { type = ASTType::BLOCK; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   ASTBlock* parent = nullptr;
 
@@ -51,6 +57,7 @@ struct ASTBlock : ASTStatement {
 
 struct ASTVariableDeclaration : ASTStatement {
   ASTVariableDeclaration() { type = ASTType::VARIABLE_DECL; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   DataType dataType = DataType::UNINITIALISED;
   std::string ident;//TODO replace with atom
@@ -59,6 +66,7 @@ struct ASTVariableDeclaration : ASTStatement {
 
 struct ASTVariableAssignment : ASTStatement {
   ASTVariableAssignment() { type = ASTType::VARIABLE_ASSIGNMENT; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   std::string ident;//TODO replace with atom
   ASTExpression* newValueExpression = nullptr;
@@ -66,6 +74,7 @@ struct ASTVariableAssignment : ASTStatement {
 
 struct ASTProcedure : ASTStatement {
   ASTProcedure() { type = ASTType::PROC_DECL; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   ASTBlock* parent = nullptr;
 
@@ -79,6 +88,7 @@ struct ASTProcedure : ASTStatement {
 
 struct ASTProcedureCall : ASTStatement {
   ASTProcedureCall() { type = ASTType::PROC_CALL; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   std::string ident;//TODO replace with atom
 
@@ -87,6 +97,7 @@ struct ASTProcedureCall : ASTStatement {
 
 struct ASTIf : ASTStatement {
   ASTIf() { type = ASTType::IF; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   ASTExpression* conditional = nullptr;
   ASTStatement* trueStatement = nullptr;
@@ -95,6 +106,7 @@ struct ASTIf : ASTStatement {
 
 struct ASTWhile : ASTStatement {
   ASTWhile() { type = ASTType::WHILE; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   ASTExpression* conditional = nullptr;
   ASTStatement* body = nullptr;
@@ -110,12 +122,14 @@ struct ASTBreak : ASTStatement {
 
 struct ASTReturn : ASTStatement {
   ASTReturn() { type = ASTType::RETURN; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   ASTExpression* expression = nullptr;
 };
 
 struct ASTLiteral : ASTExpression {
   ASTLiteral() { type = ASTType::LITERAL; }
+  void print(std::ostream& os, unsigned int level) const override;
 
   enum class ValueType {
     NONE = 0,
@@ -130,6 +144,49 @@ struct ASTLiteral : ASTExpression {
       char* data;
     } stringData{};
   } value;
+};
+
+enum class ExpressionOperatorType {
+  UNINITIALISED = 0,
+
+  ADD,
+  MINUS,
+  MULTIPLY,
+  DIVIDE,
+  EQUALS,
+  NOT_EQUALS,
+  LOGICAL_AND,
+  LOGICAL_OR,
+  LESS_THAN,
+  LESS_THAN_OR_EQUAL,
+  GREATER_THAN,
+  GREATER_THAN_OR_EQUAL,
+};
+std::ostream& operator<<(std::ostream& os, const ExpressionOperatorType& type);
+
+struct ASTBinOp : ASTExpression {
+  ASTBinOp() { type = ASTType::BIN_OP; }
+  void print(std::ostream& os, unsigned int level) const override;
+
+  ASTExpression* left = nullptr;
+  ExpressionOperatorType op = ExpressionOperatorType::UNINITIALISED;
+  ASTExpression* right = nullptr;
+};
+
+struct ASTUnaryOp : ASTExpression {
+  ASTUnaryOp() { type = ASTType::UNARY_OP; }
+  void print(std::ostream& os, unsigned int level) const override;
+
+  ASTExpression* child = nullptr;
+  ExpressionOperatorType op = ExpressionOperatorType::UNINITIALISED;
+};
+
+struct ASTVariableIdent : ASTExpression {
+  ASTVariableIdent() { type = ASTType::VARIABLE; }
+  void print(std::ostream& os, unsigned int level) const override;
+
+  DataType dataType = DataType::UNINITIALISED;
+  std::string ident;//TODO replace with atom
 };
 
 #endif //COMPILER_VISUALIZATION_AST_H

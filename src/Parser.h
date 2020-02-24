@@ -29,9 +29,10 @@ private:
 
   const Token* expect(Token::Type type);
   const Token* accept(Token::Type type);
+  const Token* accept(const std::vector<Token::Type>& types);
 
-  ASTBlock* parseBlock();
   ASTStatement* parseStatement();
+  ASTBlock* parseBlock();
   ASTProcedure* parseProcedureDeclaration();
   ASTVariableDeclaration* parseVariableDeclaration(bool declaratorOnly = false);
   ASTVariableAssignment* parseVariableAssignment();
@@ -41,9 +42,19 @@ private:
   ASTContinue* parseContinue();
   ASTBreak* parseBreak();
   ASTReturn* parseReturn();
+
   ASTExpression* parseExpression();
+  ASTExpression* parseLogicalOrExp();
+  ASTExpression* parseLogicalAndExp();
+  ASTExpression* parseEqualityExp();
+  ASTExpression* parseRelationalExp();
+  ASTExpression* parseAdditiveExp();
+  ASTExpression* parseTerm();
+  ASTExpression* parseUnaryFactor();
+  ASTExpression* parseFactor();
 
   DataType parseTypeSpecifier();
+  static ExpressionOperatorType getOpFromToken(const Token* token);
 };
 
 

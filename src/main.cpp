@@ -45,7 +45,8 @@ void compileWorker() {
 
   Parser parser(tokenStream);
   try {
-    parser.parse();
+    ASTBlock* root = parser.parse();
+    std::cout << *root << std::endl;
   } catch (std::exception&) {
     printf("Parser threw an exception\n");
 

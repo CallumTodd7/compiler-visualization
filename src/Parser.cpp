@@ -7,7 +7,7 @@
 
 
 Parser::Parser(std::vector<Token> tokenStream)
-  : tokenStream(std::move(tokenStream)) {
+    : tokenStream(std::move(tokenStream)) {
 }
 
 Token* Parser::currentToken() {
@@ -32,7 +32,7 @@ const Token* Parser::expect(Token::Type type) {
   }
 
   std::cout << token->lexerContext
-    << " Parser: Unexpected token. Got " << token->type << ", expected " << type << "." << std::endl;
+            << " Parser: Unexpected token. Got " << token->type << ", expected " << type << "." << std::endl;
   throw std::exception();
 }
 
@@ -40,6 +40,19 @@ const Token* Parser::accept(Token::Type type) {
   const Token* token = currentToken();
   if (token && token->type == type) {
     return nextToken();
+  }
+
+  return nullptr;
+}
+
+const Token* Parser::accept(const std::vector<Token::Type>& types) {
+  const Token* token = currentToken();
+  if (token) {
+    for (auto& type : types) {
+      if (token->type == type) {
+        return nextToken();
+      }
+    }
   }
 
   return nullptr;
@@ -85,13 +98,14 @@ ASTProcedure* Parser::parseProcedureDeclaration() {
 
   //TODO replace with proc call
   const Token* procIdentToken = expect(Token::Type::TOKEN_IDENTIFIER);
-  node->ident = std::string(procIdentToken->value.stringValue.data, procIdentToken->value.stringValue.count);//TODO use atom
+  node->ident = std::string(procIdentToken->value.stringValue.data,
+                            procIdentToken->value.stringValue.count);//TODO use atom
 
   expect(Token::Type::TOKEN_PARENTHESIS_OPEN);
 
   while (!accept(Token::Type::TOKEN_PARENTHESIS_CLOSE)) {
     node->parameters.push_back(parseVariableDeclaration(true));
-    if (peekToken()->type != Token::Type::TOKEN_PARENTHESIS_CLOSE) {
+    if (currentToken()->type != Token::Type::TOKEN_PARENTHESIS_CLOSE) {
       expect(Token::Type::TOKEN_COMMA);
     }
   }
@@ -108,7 +122,8 @@ ASTVariableDeclaration* Parser::parseVariableDeclaration(bool declaratorOnly) {
 
   //TODO replace with proc call
   const Token* procIdentToken = expect(Token::Type::TOKEN_IDENTIFIER);
-  node->ident = std::string(procIdentToken->value.stringValue.data, procIdentToken->value.stringValue.count);//TODO use atom
+  node->ident = std::string(procIdentToken->value.stringValue.data,
+                            procIdentToken->value.stringValue.count);//TODO use atom
 
   if (!declaratorOnly) {
     if (accept(Token::Type::TOKEN_EQUALS)) {
@@ -126,7 +141,8 @@ ASTVariableAssignment* Parser::parseVariableAssignment() {
 
   //TODO replace with proc call
   const Token* procIdentToken = expect(Token::Type::TOKEN_IDENTIFIER);
-  node->ident = std::string(procIdentToken->value.stringValue.data, procIdentToken->value.stringValue.count);//TODO use atom
+  node->ident = std::string(procIdentToken->value.stringValue.data,
+                            procIdentToken->value.stringValue.count);//TODO use atom
 
   expect(Token::Type::TOKEN_EQUALS);
 
@@ -142,13 +158,14 @@ ASTProcedureCall* Parser::parseProcedureCall() {
 
   //TODO replace with proc call
   const Token* procIdentToken = expect(Token::Type::TOKEN_IDENTIFIER);
-  node->ident = std::string(procIdentToken->value.stringValue.data, procIdentToken->value.stringValue.count);//TODO use atom
+  node->ident = std::string(procIdentToken->value.stringValue.data,
+                            procIdentToken->value.stringValue.count);//TODO use atom
 
   expect(Token::Type::TOKEN_PARENTHESIS_OPEN);
 
   while (!accept(Token::Type::TOKEN_PARENTHESIS_CLOSE)) {
     node->parameters.push_back(parseExpression());
-    if (peekToken()->type != Token::Type::TOKEN_PARENTHESIS_CLOSE) {
+    if (currentToken()->type != Token::Type::TOKEN_PARENTHESIS_CLOSE) {
       expect(Token::Type::TOKEN_COMMA);
     }
   }
@@ -257,14 +274,195 @@ ASTReturn* Parser::parseReturn() {
 }
 
 ASTExpression* Parser::parseExpression() {
-  //TODO do more than literals
-  auto node = new ASTLiteral();
+  return parseLogicalOrExp();
+}
 
-  const Token* token = expect(Token::Type::TOKEN_INTEGER);
-  node->valueType = ASTLiteral::ValueType::INTEGER;
-  node->value.integerData = token->value.integerValue;
+ASTExpression* Parser::parseLogicalOrExp() {
+  auto node = parseLogicalAndExp();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept(Token::Type::TOKEN_LOGICAL_OR))) {
+    auto rightNode = parseLogicalAndExp();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
 
   return node;
+}
+
+ASTExpression* Parser::parseLogicalAndExp() {
+  auto node = parseEqualityExp();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept(Token::Type::TOKEN_LOGICAL_AND))) {
+    auto rightNode = parseEqualityExp();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
+
+  return node;
+}
+
+ASTExpression* Parser::parseEqualityExp() {
+  auto node = parseRelationalExp();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept({
+                               Token::Type::TOKEN_EQUALS,
+                               Token::Type::TOKEN_NOT_EQUALS
+                           }))) {
+    auto rightNode = parseRelationalExp();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
+
+  return node;
+}
+
+ASTExpression* Parser::parseRelationalExp() {
+  auto node = parseAdditiveExp();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept({
+                               Token::Type::TOKEN_LESS_THAN,
+                               Token::Type::TOKEN_LESS_THAN_OR_EQUAL,
+                               Token::Type::TOKEN_GREATER_THAN,
+                               Token::Type::TOKEN_GREATER_THAN_OR_EQUAL,
+                           }))) {
+    auto rightNode = parseAdditiveExp();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
+
+  return node;
+}
+
+ASTExpression* Parser::parseAdditiveExp() {
+  auto node = parseTerm();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept({
+                               Token::Type::TOKEN_ADD,
+                               Token::Type::TOKEN_MINUS
+                           }))) {
+    auto rightNode = parseTerm();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
+
+  return node;
+}
+
+ASTExpression* Parser::parseTerm() {
+  auto node = parseUnaryFactor();
+
+  const Token* opToken = nullptr;
+  while ((opToken = accept({
+                               Token::Type::TOKEN_MULTIPLY,
+                               Token::Type::TOKEN_DIVIDE
+                           }))) {
+    auto rightNode = parseUnaryFactor();
+
+    auto newNode = new ASTBinOp();
+    newNode->left = node;
+    newNode->op = getOpFromToken(opToken);
+    newNode->right = rightNode;
+
+    node = newNode;
+  }
+
+  return node;
+}
+
+ASTExpression* Parser::parseUnaryFactor() {
+  const Token* opToken = accept({
+                                    Token::Type::TOKEN_ADD,
+                                    Token::Type::TOKEN_MINUS
+                                });
+  if (opToken) {
+    auto node = new ASTUnaryOp();
+    node->child = parseFactor();
+    node->op = getOpFromToken(opToken);
+
+    return node;
+  }
+
+  return parseFactor();
+}
+
+ASTExpression* Parser::parseFactor() {
+  const Token* peekedToken = currentToken();
+
+  switch (peekedToken->type) {
+    case Token::Type::TOKEN_PARENTHESIS_OPEN: {
+      expect(Token::Type::TOKEN_PARENTHESIS_OPEN);
+      auto expression = parseExpression();
+      expect(Token::Type::TOKEN_PARENTHESIS_CLOSE);
+
+      return expression;
+    }
+    case Token::Type::TOKEN_IDENTIFIER: {
+      if (peekToken()->type == Token::Type::TOKEN_PARENTHESIS_OPEN) {
+        // Proc call
+
+        std::cout << peekedToken->lexerContext
+                  << " Parser: procedure calls are not implemented yet" << std::endl;
+        throw std::exception();
+      } else {
+        // Ident
+
+        auto token = expect(Token::Type::TOKEN_IDENTIFIER);
+        if (token->valueType != Token::ValueType::STRING) {
+          std::cout << token->lexerContext
+                    << " Parser: variable identifier cannot be an integer" << std::endl;
+          throw std::exception();
+        }
+
+        auto node = new ASTVariableIdent();
+        node->ident = std::string(token->value.stringValue.data,
+                                  token->value.stringValue.count);//TODO use atom
+
+        return node;
+      }
+    }
+    case Token::Type::TOKEN_INTEGER: {
+      auto token = expect(Token::Type::TOKEN_INTEGER);
+
+      auto node = new ASTLiteral();
+      node->valueType = ASTLiteral::ValueType::INTEGER;
+      node->value.integerData = token->value.integerValue;
+      return node;
+    }
+    default: {
+      std::cout << *peekedToken << " Parser: Is not valid factor" << std::endl;
+      throw std::exception();
+    }
+  }
 }
 
 DataType Parser::parseTypeSpecifier() {
@@ -280,4 +478,36 @@ DataType Parser::parseTypeSpecifier() {
   std::cout << token->lexerContext
             << " Parser: Unexpected token. Got " << token->type << ", expected a type specifier." << std::endl;
   throw std::exception();
+}
+
+ExpressionOperatorType Parser::getOpFromToken(const Token* token) {
+  switch (token->type) {
+    case Token::Type::TOKEN_ADD:
+      return ExpressionOperatorType::ADD;
+    case Token::Type::TOKEN_MINUS:
+      return ExpressionOperatorType::MINUS;
+    case Token::Type::TOKEN_MULTIPLY:
+      return ExpressionOperatorType::MULTIPLY;
+    case Token::Type::TOKEN_DIVIDE:
+      return ExpressionOperatorType::DIVIDE;
+    case Token::Type::TOKEN_EQUALS:
+      return ExpressionOperatorType::EQUALS;
+    case Token::Type::TOKEN_NOT_EQUALS:
+      return ExpressionOperatorType::NOT_EQUALS;
+    case Token::Type::TOKEN_LOGICAL_AND:
+      return ExpressionOperatorType::LOGICAL_AND;
+    case Token::Type::TOKEN_LOGICAL_OR:
+      return ExpressionOperatorType::LOGICAL_OR;
+    case Token::Type::TOKEN_LESS_THAN:
+      return ExpressionOperatorType::LESS_THAN;
+    case Token::Type::TOKEN_LESS_THAN_OR_EQUAL:
+      return ExpressionOperatorType::LESS_THAN_OR_EQUAL;
+    case Token::Type::TOKEN_GREATER_THAN:
+      return ExpressionOperatorType::GREATER_THAN;
+    case Token::Type::TOKEN_GREATER_THAN_OR_EQUAL:
+      return ExpressionOperatorType::GREATER_THAN_OR_EQUAL;
+    default:
+      std::cout << token->lexerContext << " Parser: Token (" << *token << ") is not an op token." << std::endl;
+      throw std::exception();
+  }
 }
