@@ -20,6 +20,7 @@ private:
   bool isWorkerDone = false;
   bool isMainReady = false;
   bool isWorkerReady = false;
+  bool shouldKill = false;
 
 public:
   explicit ThreadSync(bool isActive)
@@ -28,6 +29,8 @@ public:
 
   void workerReady();
   void mainReady(const std::function<void()>& callback);
+
+  void killWorker();
 
   void threadExit();
   bool isThreadDone();

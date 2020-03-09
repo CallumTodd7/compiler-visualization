@@ -34,6 +34,13 @@ void ThreadSync::workerReady() {
   std::cout << "worker processing" << std::endl;
 #endif
 
+  // test kill flag
+  if (shouldKill) {
+    //TODO temp: should complete thread asap
+    //  currently only skips the thread sync waiting
+    isActive = false;
+  }
+
   // reset ready flags
 #if THREAD_DEBUG_MSG
   std::cout << "reset flags" << std::endl;
@@ -69,6 +76,21 @@ void ThreadSync::mainReady(const std::function<void()>& callback) {
   cv.notify_all();
 #if THREAD_DEBUG_MSG
   std::cout << "isMainReady = true; notify" << std::endl;
+#endif
+}
+
+void ThreadSync::killWorker() {
+  assert(this->isActive);
+
+  // set ready flag
+  // - allowing worker thread to continue
+  isMainReady = true;
+  // set kill flag
+  // - indicating that the worker thread should terminate
+  shouldKill = true;
+  cv.notify_all();
+#if THREAD_DEBUG_MSG
+  std::cout << "isMainReady = true; shouldKill = true; notify" << std::endl;
 #endif
 }
 

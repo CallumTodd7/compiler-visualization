@@ -8,6 +8,8 @@
 #include "ThreadSync.h"
 #include "Parser.h"
 
+#include "visuals/Application.h"
+
 struct CliOptions {
   char* sourceFilepath = nullptr;
   char* destFilepath = nullptr;
@@ -19,6 +21,7 @@ static CliOptions cliOptions;
 ThreadSync* threadSync = nullptr;
 
 int workerExitCode = 0;
+int visualsExitCode = 0;
 
 void compileWorker() {
   printf("Source: %s\nDestination: %s\n\n", cliOptions.sourceFilepath, cliOptions.destFilepath);
@@ -92,21 +95,20 @@ int main(int argc, char* argv[]) {
   std::thread compilationThread(compileWorker);
 
   if (cliOptions.hasUI) {
-    while (!threadSync->isThreadDone()) {
-      threadSync->mainReady([&]{
-        std::cout << "Copy data" << std::endl;
-      });
-      std::cout << "Animating!" << std::endl;
+    Application app({argc, argv});
+    visualsExitCode = app.exec();
 
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-      std::cout << "Animated!" << std::endl;
-    }
+//    while (!threadSync->isThreadDone()) {
+//      threadSync->mainReady([]{});
+//      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+//    }
   }
 
+  threadSync->killWorker();
   compilationThread.join();
 
   delete threadSync;
 
-  return workerExitCode;
+  std::cout << "workerExitCode: " << workerExitCode << ", visualsExitCode: " << visualsExitCode << std::endl;
+  return workerExitCode ? workerExitCode : visualsExitCode;
 }
