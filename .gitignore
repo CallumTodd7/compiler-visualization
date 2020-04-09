@@ -1,6 +1,8 @@
 [Bb]uild/
 [Bb]in/
 !external/**
+ubuntu_data/*
+!ubuntu_data/build.sh
 
 # Created by https://www.gitignore.io/api/c++,linux,macos,clion,windows,visualstudio,visualstudiocode
 # Edit at https://www.gitignore.io/?templates=c++,linux,macos,clion,windows,visualstudio,visualstudiocode

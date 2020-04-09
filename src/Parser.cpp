@@ -4,6 +4,8 @@
 
 #include <iostream>
 #include "Parser.h"
+#include "AST.h"
+#include "Lexer.h"
 
 
 Parser::Parser(std::vector<Token> tokenStream)
@@ -456,6 +458,16 @@ ASTExpression* Parser::parseFactor() {
       auto node = new ASTLiteral();
       node->valueType = ASTLiteral::ValueType::INTEGER;
       node->value.integerData = token->value.integerValue;
+      return node;
+    }
+    case Token::Type::TOKEN_STRING: {
+      auto token = expect(Token::Type::TOKEN_STRING);
+
+      auto node = new ASTLiteral();
+      node->valueType = ASTLiteral::ValueType::STRING;
+      // TODO cleanup
+      node->value.stringData.count = token->value.stringValue.count;
+      node->value.stringData.data = token->value.stringValue.data;
       return node;
     }
     default: {

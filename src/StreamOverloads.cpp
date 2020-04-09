@@ -4,6 +4,7 @@
 
 #include "Lexer.h"
 #include "AST.h"
+#include "Generator.h"
 
 std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
   switch (type) {
@@ -240,6 +241,48 @@ std::ostream& operator<<(std::ostream& os, const ExpressionOperatorType& opType)
       os << "GREATER_THAN_OR_EQUAL";
       break;
   }
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Register& reg) {
+  switch (reg) {
+    case NONE:
+      os << "REGISTER_NONE";
+      break;
+    case RAX:
+      os << "rax";
+      break;
+    case RBX:
+      os << "rbx";
+      break;
+    case RCX:
+      os << "rcx";
+      break;
+    case RDX:
+      os << "rdx";
+      break;
+    case RSI:
+      os << "rsi";
+      break;
+    case RDI:
+      os << "rdi";
+      break;
+    default:
+      os << "UNKNOWN_REGISTER(" << (int)reg << ")";
+      break;
+  }
+  return os;
+}
+
+int Location::idCount = 0;//TODO FIXME Move to proper file
+
+std::ostream& operator<<(std::ostream& os, const Location& location) {
+  os << "loc" << location.id;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Location* location) {
+  os << *location;
   return os;
 }
 

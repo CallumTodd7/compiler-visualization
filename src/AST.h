@@ -6,7 +6,20 @@
 #define COMPILER_VISUALIZATION_AST_H
 
 #include <vector>
+#include <string>
 #include "Types.h"
+
+struct Location {
+  int id;
+
+  Location() : id(idCount++) {}
+
+private:
+  static int idCount;
+
+};
+std::ostream& operator<<(std::ostream& os, const Location& location);
+std::ostream& operator<<(std::ostream& os, const Location* location);
 
 enum ASTType {
   UNINITIALISED = 0,
@@ -44,6 +57,7 @@ struct ASTStatement : ASTNode {
 };
 
 struct ASTExpression : ASTNode {
+  Location* location = new Location();
 };
 
 struct ASTBlock : ASTStatement {

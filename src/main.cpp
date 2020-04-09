@@ -7,6 +7,7 @@
 #include "Lexer.h"
 #include "ThreadSync.h"
 #include "Parser.h"
+#include "Generator.h"
 
 struct CliOptions {
   char* sourceFilepath = nullptr;
@@ -44,8 +45,9 @@ void compileWorker() {
   threadSync->workerReady();
 
   Parser parser(tokenStream);
+  ASTBlock* root = nullptr;
   try {
-    ASTBlock* root = parser.parse();
+    root = parser.parse();
     std::cout << *root << std::endl;
   } catch (std::exception&) {
     printf("Parser threw an exception\n");
@@ -54,6 +56,10 @@ void compileWorker() {
     threadSync->threadExit();
     return;
   }
+  threadSync->workerReady();
+
+  Generator generator(root, cliOptions.destFilepath);
+  generator.generate();
   threadSync->workerReady();
 
   workerExitCode = 0;

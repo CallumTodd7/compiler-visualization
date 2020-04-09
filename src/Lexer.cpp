@@ -59,6 +59,19 @@ Token Lexer::nextToken() {
 
   if (isdigit(currentChar)) {
     return readNumber(lexerContext);
+  } else if (currentChar == '"') {
+    // String
+    std::string word;
+
+    // Read alpha in
+    advanceCursor();
+    do {
+      word.push_back(currentChar);
+      advanceCursor();
+    } while (currentChar != '"' && currentChar >= 0);
+    advanceCursor();
+
+    return {lexerContext, Token::Type::TOKEN_STRING, word};
   } else if (isalpha(currentChar)) {
     std::string word;
 
