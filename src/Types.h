@@ -13,4 +13,6 @@ enum class DataType {
   S8,
 };
 
+unsigned int bytesOf(DataType type);
+
 #endif //COMPILER_VISUALIZATION_TYPES_H

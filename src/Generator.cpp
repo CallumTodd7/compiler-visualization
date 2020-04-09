@@ -7,6 +7,60 @@
 #include "Generator.h"
 #include "AST.h"
 
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "cppcoreguidelines-pro-type-static-cast-downcast"
+
+std::string registerToByteEquivalent(Register reg, unsigned int bytes) {
+  if (bytes == 1) {
+    return registerTo8BitEquivalent(reg);
+  } else if (bytes == 2) {
+    return registerTo16BitEquivalent(reg);
+  } else if (bytes == 4) {
+    return registerTo32BitEquivalent(reg);
+  } else if (bytes == 8) {
+    std::stringstream ss;
+    ss << reg;
+    return ss.str();
+  } else {
+    std::cout << "Byte amount not supported!" << std::endl;
+    throw std::exception();
+  }
+}
+
+std::string registerTo8BitEquivalent(Register reg) {
+  switch (reg) {
+    case NONE: return "REGISTER_NONE";
+    case RAX: return "al";
+    case RBX: return "bl";
+    case RCX: return "cl";
+    case RDX: return "dl";
+    case RSI: return "sil";
+    case RDI: return "dil";
+  }
+}
+std::string registerTo16BitEquivalent(Register reg) {
+  switch (reg) {
+    case NONE: return "REGISTER_NONE";
+    case RAX: return "ax";
+    case RBX: return "bx";
+    case RCX: return "cx";
+    case RDX: return "dx";
+    case RSI: return "si";
+    case RDI: return "di";
+  }
+}
+std::string registerTo32BitEquivalent(Register reg) {
+  switch (reg) {
+    case NONE: return "REGISTER_NONE";
+    case RAX: return "eax";
+    case RBX: return "ebx";
+    case RCX: return "ecx";
+    case RDX: return "edx";
+    case RSI: return "esi";
+    case RDI: return "edi";
+  }
+}
+
 Generator::Generator(ASTNode* astRoot, std::string filepath) {
   this->astRoot = astRoot;
 
@@ -32,9 +86,10 @@ void Generator::generate() {
   comment("END leading boilerplate");
 
   if (astRoot->type == ASTType::BLOCK) {
-    walkBlock(static_cast<ASTBlock*>(astRoot));
+    walkBlock(static_cast<ASTBlock*>(astRoot), true);
   } else {
     std::cout << "Root is not block. Bad." << std::endl;
+    file->fileStream->close();
     throw std::exception();
   }
 
@@ -92,11 +147,54 @@ void Generator::writeStringLiteralList(const std::string& str) {
   }
 }
 
-void Generator::walkBlock(ASTBlock* node) {
+void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
   comment("BEGIN Block");
+
+  if (!isEntrypoint) {
+    // Set stackbase pointer
+    *file->fileStream << "push rbp\n";
+    *file->fileStream << "mov rbp, rsp\n";
+  }
+
+  // Allocate local var space on stack
+  BlockScope scope = BlockScope();
+
+  unsigned int totalLocalBytes = 0;
+  for (auto statement : node->statements) {
+    if (statement->type == ASTType::VARIABLE_DECL) {
+      auto* statementNode = static_cast<ASTVariableDeclaration*>(statement);
+
+      BlockScope::Variable var = BlockScope::Variable();
+      var.offset = totalLocalBytes;
+      var.location = new Location();
+      var.dataType = statementNode->dataType;
+      scope.variables.insert_or_assign(statementNode->ident, var);
+
+      totalLocalBytes += bytesOf(statementNode->dataType);
+    }
+  }
+  *file->fileStream << "sub rsp, " << totalLocalBytes << "\n";
+
+  blockScopeStack.push(scope);
+
+  // Perform block
   for (auto statement : node->statements) {
     walkStatement(statement);
   }
+
+  // Cleanup
+
+  blockScopeStack.pop();
+
+  if (!isEntrypoint) {
+    // Reset stackbase pointer & Dealloc local var space on stack
+    *file->fileStream << "mov rsp, rbp\n";
+    *file->fileStream << "pop rbp\n";
+  } else {
+    // Dealloc local var space on stack
+    *file->fileStream << "add rsp, " << totalLocalBytes << "\n";
+  }
+
   comment("END Block");
 }
 
@@ -104,6 +202,7 @@ void Generator::walkStatement(ASTStatement* node) {
   switch (node->type) {
     case UNINITIALISED:
       std::cout << "Statement uninitialised" << std::endl;
+      file->fileStream->close();
       throw std::exception();
     case BLOCK:
       walkStatement(static_cast<ASTBlock*>(node));
@@ -137,6 +236,7 @@ void Generator::walkStatement(ASTStatement* node) {
       break;
     default:
       std::cout << "Statement must be an expression. Bad." << std::endl;
+      file->fileStream->close();
       throw std::exception();
   }
 }
@@ -153,12 +253,18 @@ Location* Generator::walkExpression(ASTExpression* node) {
       return walkVariableIdent(static_cast<ASTVariableIdent*>(node));
     default:
       std::cout << "Expression must be a statement. Bad." << std::endl;
+      file->fileStream->close();
       throw std::exception();
   }
 }
 
 void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
+  comment("BEGIN VariableDeclaration");
 
+  Location* loc = walkExpression(node->initalValueExpression);
+  moveToMem(node->ident, loc, bytesOf(node->dataType));
+
+  comment("END VariableDeclaration");
 }
 
 void Generator::walkProcedureDeclaration(ASTProcedure* node) {
@@ -195,6 +301,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
       moveToRegister(registerOrder[i], paramLocs[i]);
     } else {
       std::cout << "Not implemented yet" << std::endl;
+      file->fileStream->close();
       throw std::exception();
     }
   }
@@ -208,10 +315,10 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
     if (i < possibleRegistersInCallBeforeStack) {
       Location* loc = paramLocs[i];
       Register reg = locationMap.at(loc);
-      registerContents[reg] = nullptr;
-      locationMap.erase(loc);
+      removeLocation(reg, loc);
     } else {
       std::cout << "Not implemented yet" << std::endl;
+      file->fileStream->close();
       throw std::exception();
     }
   }
@@ -243,6 +350,18 @@ void Generator::walkReturn(ASTReturn* node) {
 
 }
 
+void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
+  registerContents[reg] = newLoc;
+
+  locationMap.insert_or_assign(newLoc, reg);
+  locationMap.erase(oldLoc);
+}
+
+void Generator::removeLocation(Register reg, Location* oldLoc) {
+  registerContents[reg] = nullptr;
+  locationMap.erase(oldLoc);
+}
+
 Location* Generator::walkBinOp(ASTBinOp* node) {
   comment("BEGIN BinOp");
 
@@ -254,51 +373,33 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
   switch (node->op) {
     case ExpressionOperatorType::ADD:
       *file->fileStream << "add " << regLeft << ", " << regRight << "\n";
-      registerContents[regLeft] = node->location;
-      locationMap.insert_or_assign(node->location, regLeft);
-
-      // Remove left & right locations
-      registerContents[regRight] = nullptr;
-      locationMap.erase(node->left->location);
-      locationMap.erase(node->right->location);
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MINUS:
       *file->fileStream << "sub " << regLeft << ", " << regRight << "\n";
-      registerContents[regLeft] = node->location;
-      locationMap.insert_or_assign(node->location, regLeft);
-
-      // Remove left & right locations
-      registerContents[regRight] = nullptr;
-      locationMap.erase(node->left->location);
-      locationMap.erase(node->right->location);
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MULTIPLY: {
       *file->fileStream << "imul " << regLeft << ", " << regRight << "\n";
-      registerContents[regLeft] = node->location;
-      locationMap.insert_or_assign(node->location, regLeft);
-
-      // Remove left & right locations
-      registerContents[regRight] = nullptr;
-      locationMap.erase(node->left->location);
-      locationMap.erase(node->right->location);
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::DIVIDE: {
       *file->fileStream << "idiv " << regLeft << ", " << regRight << "\n";
-      registerContents[regLeft] = node->location;
-      locationMap.insert_or_assign(node->location, regLeft);
-
-      // Remove left & right locations
-      registerContents[regRight] = nullptr;
-      locationMap.erase(node->left->location);
-      locationMap.erase(node->right->location);
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::UNINITIALISED:
       std::cout << "BinOp UNINITIALISED" << std::endl;
+      file->fileStream->close();
       throw std::exception();
     default:
       std::cout << "BinOp not implemented: " << node->op << std::endl;
+      file->fileStream->close();
       throw std::exception();
   }
 
@@ -309,6 +410,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
 
 Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
   std::cout << "UnaryOp didn't return a location" << std::endl;
+  file->fileStream->close();
   throw std::exception();
 }
 
@@ -342,8 +444,16 @@ Location* Generator::walkLiteral(ASTLiteral* node) {
 }
 
 Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
-  std::cout << "VariableIdent didn't return a location" << std::endl;
-  throw std::exception();
+  comment("BEGIN VariableIdent");
+
+  if (node->dataType == DataType::UNINITIALISED) {
+    node->dataType = blockScopeStack.top().variables.at(node->ident).dataType;
+  }
+  node->location = recallFromMem(node->ident, bytesOf(node->dataType));
+
+  comment("END VariableIdent");
+
+  return node->location;
 }
 
 void Generator::pushCallerSaved() {
@@ -360,6 +470,41 @@ void Generator::popCallerSaved() {
 
 
   comment("END popCallerSaved");
+}
+
+void Generator::moveToMem(const std::string& ident, Location* location, unsigned int bytes) {
+  BlockScope::Variable var = blockScopeStack.top().variables.at(ident);
+
+  //TODO: Don't use NASM effective addressing
+  //mov rax, esp
+  //sub rax, offset
+
+  Register locRegister = locationMap.at(location);
+  std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
+  if (genComments) {
+    *file->fileStream << ";mov " << *location << " to mem(" << ident << ": rsp-" << var.offset << ")\n";
+  }
+  *file->fileStream << "mov [rsp - " << var.offset << "], " << locRegisterStr << "\n";
+
+//  registerContents[reg] = location;
+//  locationMap.insert_or_assign(location, reg);
+}
+
+Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes) {
+  BlockScope::Variable var = blockScopeStack.top().variables.at(ident);
+
+  Register locRegister = getAvailableRegister();
+  std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
+  if (bytes != 8) {
+    // Zero 64bit register if only a part of it will be filled
+    *file->fileStream << "xor " << locRegister << ", " << locRegister << "\n";
+  }
+  *file->fileStream << "mov " << locRegisterStr << ", [rsp - " << var.offset << "]\n";
+
+  registerContents[locRegister] = var.location;
+  locationMap.insert_or_assign(var.location, locRegister);
+
+  return var.location;
 }
 
 void Generator::moveToRegister(Register reg, Location* location) {
@@ -401,6 +546,7 @@ Register Generator::getAvailableRegister() {
 
   if (availableRegister == Register::NONE) {
     std::cout << "No available register!" << std::endl;
+    file->fileStream->close();
     throw std::exception();
   }
 
@@ -449,6 +595,7 @@ Register Generator::getRegisterFor(Location* location, bool isConstant, const st
 
   // Else, error (for now; TODO)
   std::cout << "No register for " << *location << std::endl;
+  file->fileStream->close();
   throw std::exception();
 }
 
@@ -457,3 +604,5 @@ void Generator::comment(const std::string& comment) {
 
   *file->fileStream << ";" << comment << "\n";
 }
+
+#pragma clang diagnostic pop

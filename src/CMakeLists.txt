@@ -4,5 +4,6 @@ add_executable(cv
     StreamOverloads.cpp
     ThreadSync.cpp ThreadSync.h
     Parser.cpp Parser.h
-    AST.h Types.h
+    Types.h Types.cpp
+    AST.h
     Generator.cpp Generator.h)
