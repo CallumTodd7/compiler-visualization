@@ -171,6 +171,7 @@ enum class ExpressionOperatorType {
   NOT_EQUALS,
   LOGICAL_AND,
   LOGICAL_OR,
+  LOGICAL_NOT,
   LESS_THAN,
   LESS_THAN_OR_EQUAL,
   GREATER_THAN,

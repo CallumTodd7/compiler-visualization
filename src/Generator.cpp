@@ -142,7 +142,6 @@ void Generator::generate() {
 void Generator::writeStringLiteralList(const std::string& str) {
   unsigned int charIndex = 0;
 
-
   while (charIndex < str.size()) {
     if (charIndex != 0) {
       *file->fileStream << ", ";
@@ -166,16 +165,12 @@ void Generator::writeStringLiteralList(const std::string& str) {
       }
     }
 
-#if 1
     std::string strSegment;
     while (charIndex < str.size() && str[charIndex] != '\\') {
       strSegment.push_back(str[charIndex]);
       charIndex++;
     }
     *file->fileStream << "\"" << strSegment << "\"";
-#else
-    *file->fileStream << (int)str[charIndex++];
-#endif
   }
 }
 
@@ -388,6 +383,23 @@ void Generator::walkReturn(ASTReturn* node) {
 
 Location* Generator::walkBinOp(ASTBinOp* node) {
   comment("BEGIN BinOp");
+  //DEFER: comment("END BinOp");
+
+  // Special case for Logical Or: Don't walk right side if left is true
+  if (node->op == ExpressionOperatorType::LOGICAL_OR) {
+    walkExpression(node->left);
+    Register regLeft = getRegisterFor(node->left->location);
+
+    walkExpression(node->right);
+    Register regRight = getRegisterFor(node->right->location);
+
+    std::cout << "LOGICAL_OR not implemented" << std::endl;
+    file->fileStream->close();
+    throw std::exception();
+
+    comment("END BinOp");
+    return node->location;
+  }
 
   walkExpression(node->left);
   walkExpression(node->right);
@@ -417,6 +429,65 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       removeLocation(regRight, node->right->location);
       break;
     }
+    case ExpressionOperatorType::EQUALS: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setz " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::NOT_EQUALS: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setnz " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::LESS_THAN: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setl " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::LESS_THAN_OR_EQUAL: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setle " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::GREATER_THAN: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setg " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::GREATER_THAN_OR_EQUAL: {
+      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
+      *file->fileStream << "setge " << regLeft8BitStr << "\n";
+      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      swapLocation(regLeft, node->left->location, node->location);
+      removeLocation(regRight, node->right->location);
+      break;
+    }
+    case ExpressionOperatorType::LOGICAL_AND: {
+      std::cout << "LOGICAL_AND not implemented" << std::endl;
+      file->fileStream->close();
+      throw std::exception();
+    }
     case ExpressionOperatorType::UNINITIALISED:
       std::cout << "BinOp UNINITIALISED" << std::endl;
       file->fileStream->close();
@@ -433,9 +504,42 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
 }
 
 Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
-  std::cout << "UnaryOp didn't return a location" << std::endl;
-  file->fileStream->close();
-  throw std::exception();
+  comment("BEGIN UnaryOp");
+
+  walkExpression(node->child);
+  Register regChild = getRegisterFor(node->child->location);
+
+  switch (node->op) {
+    case ExpressionOperatorType::ADD:
+      swapLocation(regChild, node->child->location, node->location);
+      break;
+    case ExpressionOperatorType::MINUS:
+      *file->fileStream << "xor " << Register::R15 << ", " << Register::R15 << ";zero\n";
+      *file->fileStream << "sub " << Register::R15 << ", " << regChild << "\n";
+      *file->fileStream << "mov " << regChild << ", " << Register::R15 << "\n";
+      swapLocation(regChild, node->child->location, node->location);
+      break;
+    case ExpressionOperatorType::LOGICAL_NOT: {
+      *file->fileStream << "cmp " << regChild << ", " << 0 << "\n";
+      std::string regChild8BitStr = registerTo8BitEquivalent(regChild);
+      *file->fileStream << "sete " << regChild8BitStr << "\n";
+      *file->fileStream << "movzx " << regChild << ", " << regChild8BitStr << "\n";
+      swapLocation(regChild, node->child->location, node->location);
+      break;
+    }
+    case ExpressionOperatorType::UNINITIALISED:
+      std::cout << "UnaryOp UNINITIALISED" << std::endl;
+      file->fileStream->close();
+      throw std::exception();
+    default:
+      std::cout << "UnaryOp not implemented: " << node->op << std::endl;
+      file->fileStream->close();
+      throw std::exception();
+  }
+
+  comment("END UnaryOp");
+
+  return node->location;
 }
 
 Location* Generator::walkLiteral(ASTLiteral* node) {

@@ -5,8 +5,8 @@ void main() {
   u8 num2 = 10;
   {
     u8 num3 = num + num2;
-    printf("The number is: %d\n", num3);
+    printf("The number is: %d\n", !(num3 != 55));
   }
-  printf("The number is: %d\n", num2);
+  printf("The number is: %d\n", num);
   puts("Dave");
 }

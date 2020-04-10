@@ -270,10 +270,19 @@ Token Lexer::readOperator(const LexerContext& lexerContext) {
   } else if (firstChar == '}') {
     return {lexerContext, Token::Type::TOKEN_BRACE_CLOSE};
   } else if (firstChar == '=') {
-    return {lexerContext, Token::Type::TOKEN_EQUALS};
-  } else if (firstChar == '!' && currentChar == '=') {
-    advanceCursor();
-    return {lexerContext, Token::Type::TOKEN_NOT_EQUALS}; // '!='
+    if (currentChar == '=') {
+      advanceCursor();
+      return {lexerContext, Token::Type::TOKEN_EQUALS}; // '=='
+    } else {
+      return {lexerContext, Token::Type::TOKEN_ASSIGN}; // '='
+    }
+  } else if (firstChar == '!') {
+    if (currentChar == '=') {
+      advanceCursor();
+      return {lexerContext, Token::Type::TOKEN_NOT_EQUALS}; // '!='
+    } else {
+      return {lexerContext, Token::Type::TOKEN_LOGICAL_NOT}; // '!'
+    }
   } else if (firstChar == '&' && currentChar == '&') {
     advanceCursor();
     return {lexerContext, Token::Type::TOKEN_LOGICAL_AND}; // '&&'

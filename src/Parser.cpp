@@ -128,7 +128,7 @@ ASTVariableDeclaration* Parser::parseVariableDeclaration(bool declaratorOnly) {
                             procIdentToken->value.stringValue.count);//TODO use atom
 
   if (!declaratorOnly) {
-    if (accept(Token::Type::TOKEN_EQUALS)) {
+    if (accept(Token::Type::TOKEN_ASSIGN)) {
       node->initalValueExpression = parseExpression();
     }
 
@@ -146,7 +146,7 @@ ASTVariableAssignment* Parser::parseVariableAssignment() {
   node->ident = std::string(procIdentToken->value.stringValue.data,
                             procIdentToken->value.stringValue.count);//TODO use atom
 
-  expect(Token::Type::TOKEN_EQUALS);
+  expect(Token::Type::TOKEN_ASSIGN);
 
   node->newValueExpression = parseExpression();
 
@@ -404,7 +404,8 @@ ASTExpression* Parser::parseTerm() {
 ASTExpression* Parser::parseUnaryFactor() {
   const Token* opToken = accept({
                                     Token::Type::TOKEN_ADD,
-                                    Token::Type::TOKEN_MINUS
+                                    Token::Type::TOKEN_MINUS,
+                                    Token::Type::TOKEN_LOGICAL_NOT
                                 });
   if (opToken) {
     auto node = new ASTUnaryOp();
@@ -510,6 +511,8 @@ ExpressionOperatorType Parser::getOpFromToken(const Token* token) {
       return ExpressionOperatorType::LOGICAL_AND;
     case Token::Type::TOKEN_LOGICAL_OR:
       return ExpressionOperatorType::LOGICAL_OR;
+    case Token::Type::TOKEN_LOGICAL_NOT:
+      return ExpressionOperatorType::LOGICAL_NOT;
     case Token::Type::TOKEN_LESS_THAN:
       return ExpressionOperatorType::LESS_THAN;
     case Token::Type::TOKEN_LESS_THAN_OR_EQUAL:
