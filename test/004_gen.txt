@@ -3,7 +3,10 @@
 void main() {
   u8 num = 1+2+3+4+5+6+7+8+9;
   u8 num2 = 10;
-  u8 num3 = num + num2;
-  printf("The number is: %d\n", num3);
+  {
+    u8 num3 = num + num2;
+    printf("The number is: %d\n", num3);
+  }
+  printf("The number is: %d\n", num2);
   puts("Dave");
 }

@@ -15,10 +15,15 @@ enum Register {
   RBX = 1,
   RCX = 2,
   RDX = 3,
-  RSI = 4,
-  RDI = 5,
+  R8 = 4,
+  R9 = 5,
+  R10 = 6,
+  R11 = 7,
+  RSI = 8,
+  RDI = 9,
+  R15 = 15,
 };
-#define TOTAL_REGISTERS 6
+#define TOTAL_REGISTERS 10
 std::ostream& operator<<(std::ostream& os, const Register& reg);
 
 std::string registerToByteEquivalent(Register reg, unsigned int bytes);
@@ -33,11 +38,28 @@ struct OutputFile {
 
 struct BlockScope {
   struct Variable {
+    unsigned int stackHeight;
     unsigned int offset;
     Location* location;
     DataType dataType;
   };
+
+  BlockScope* parent = nullptr;
+  unsigned int stackHeight;
+
   std::map<std::string, Variable> variables;
+
+  Variable searchForVariable(const std::string& ident) {
+    try {
+      return variables.at(ident);
+    } catch (std::out_of_range&) {
+      if (parent) {
+        return parent->searchForVariable(ident);
+      } else {
+        throw std::out_of_range("Variable " + ident + " not found!");
+      }
+    }
+  }
 };
 
 class Generator {
@@ -88,6 +110,8 @@ public:
   Register getRegisterForConst(Location* location, unsigned long long constant);
   Register getRegisterForConst(Location* location, const std::string& constant);
   Register getRegisterFor(Location* location, bool isConstant = false, const std::string& constant = "");
+
+  Register registerWithAddressForVariable(BlockScope::Variable variable);
   void moveToMem(const std::string& ident, Location* loc, unsigned int bytes);
   Location* recallFromMem(const std::string& ident, unsigned int bytes);
 

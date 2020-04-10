@@ -36,8 +36,19 @@ std::string registerTo8BitEquivalent(Register reg) {
     case RDX: return "dl";
     case RSI: return "sil";
     case RDI: return "dil";
+    case R8:
+    case R9:
+    case R10:
+    case R11:
+    case R15: {
+      std::stringstream ss;
+      ss << reg << "b";
+      return ss.str();
+    }
   }
+  throw std::exception();
 }
+
 std::string registerTo16BitEquivalent(Register reg) {
   switch (reg) {
     case NONE: return "REGISTER_NONE";
@@ -47,8 +58,19 @@ std::string registerTo16BitEquivalent(Register reg) {
     case RDX: return "dx";
     case RSI: return "si";
     case RDI: return "di";
+    case R8:
+    case R9:
+    case R10:
+    case R11:
+    case R15: {
+      std::stringstream ss;
+      ss << reg << "w";
+      return ss.str();
+    }
   }
+  throw std::exception();
 }
+
 std::string registerTo32BitEquivalent(Register reg) {
   switch (reg) {
     case NONE: return "REGISTER_NONE";
@@ -58,7 +80,17 @@ std::string registerTo32BitEquivalent(Register reg) {
     case RDX: return "edx";
     case RSI: return "esi";
     case RDI: return "edi";
+    case R8:
+    case R9:
+    case R10:
+    case R11:
+    case R15: {
+      std::stringstream ss;
+      ss << reg << "d";
+      return ss.str();
+    }
   }
+  throw std::exception();
 }
 
 Generator::Generator(ASTNode* astRoot, std::string filepath) {
@@ -158,6 +190,10 @@ void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
 
   // Allocate local var space on stack
   BlockScope scope = BlockScope();
+  scope.stackHeight = blockScopeStack.size();
+  if (!blockScopeStack.empty()) {
+    scope.parent = &blockScopeStack.top();
+  }
 
   unsigned int totalLocalBytes = 0;
   for (auto statement : node->statements) {
@@ -168,6 +204,7 @@ void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
       var.offset = totalLocalBytes;
       var.location = new Location();
       var.dataType = statementNode->dataType;
+      var.stackHeight = scope.stackHeight;
       scope.variables.insert_or_assign(statementNode->ident, var);
 
       totalLocalBytes += bytesOf(statementNode->dataType);
@@ -205,7 +242,7 @@ void Generator::walkStatement(ASTStatement* node) {
       file->fileStream->close();
       throw std::exception();
     case BLOCK:
-      walkStatement(static_cast<ASTBlock*>(node));
+      walkBlock(static_cast<ASTBlock*>(node));
       break;
     case PROC_DECL:
       walkProcedureDeclaration(static_cast<ASTProcedure*>(node));
@@ -314,8 +351,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
   for (size_t i = 0; i < paramLocs.size(); ++i) {
     if (i < possibleRegistersInCallBeforeStack) {
       Location* loc = paramLocs[i];
-      Register reg = locationMap.at(loc);
-      removeLocation(reg, loc);
+      removeLocation(registerOrder[i], loc);
     } else {
       std::cout << "Not implemented yet" << std::endl;
       file->fileStream->close();
@@ -348,18 +384,6 @@ void Generator::walkBreak(ASTBreak* node) {
 
 void Generator::walkReturn(ASTReturn* node) {
 
-}
-
-void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
-  registerContents[reg] = newLoc;
-
-  locationMap.insert_or_assign(newLoc, reg);
-  locationMap.erase(oldLoc);
-}
-
-void Generator::removeLocation(Register reg, Location* oldLoc) {
-  registerContents[reg] = nullptr;
-  locationMap.erase(oldLoc);
 }
 
 Location* Generator::walkBinOp(ASTBinOp* node) {
@@ -447,7 +471,8 @@ Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
   comment("BEGIN VariableIdent");
 
   if (node->dataType == DataType::UNINITIALISED) {
-    node->dataType = blockScopeStack.top().variables.at(node->ident).dataType;
+    auto var = blockScopeStack.top().searchForVariable(node->ident);
+    node->dataType = var.dataType;
   }
   node->location = recallFromMem(node->ident, bytesOf(node->dataType));
 
@@ -472,26 +497,45 @@ void Generator::popCallerSaved() {
   comment("END popCallerSaved");
 }
 
-void Generator::moveToMem(const std::string& ident, Location* location, unsigned int bytes) {
-  BlockScope::Variable var = blockScopeStack.top().variables.at(ident);
+Register Generator::registerWithAddressForVariable(BlockScope::Variable variable) {
+  Register reg = Register::R15;
 
-  //TODO: Don't use NASM effective addressing
-  //mov rax, esp
-  //sub rax, offset
+  unsigned int stackHeightDist = blockScopeStack.top().stackHeight - variable.stackHeight;
+  unsigned int offset = variable.offset;
+
+  if (stackHeightDist > 0) {
+    *file->fileStream << "mov " << reg << ", [rbp]\n";
+    for (unsigned int i = 0; i < stackHeightDist - 1; ++i) {
+      *file->fileStream << "mov " << reg << ", [" << reg << "]\n";
+    }
+  } else {
+    *file->fileStream << "mov " << reg << ", rbp\n";
+  }
+  offset += 1; // + 1 because we're using rbp instead of rsp
+
+  if (offset) {
+    *file->fileStream << "sub " << reg << ", " << offset << "\n";
+  }
+
+  return reg;
+}
+
+void Generator::moveToMem(const std::string& ident, Location* location, unsigned int bytes) {
+  BlockScope::Variable var = blockScopeStack.top().searchForVariable(ident);
 
   Register locRegister = locationMap.at(location);
   std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
   if (genComments) {
-    *file->fileStream << ";mov " << *location << " to mem(" << ident << ": rsp-" << var.offset << ")\n";
+    *file->fileStream << ";mov " << *location << " to mem(ident: " << ident << ")\n";
   }
-  *file->fileStream << "mov [rsp - " << var.offset << "], " << locRegisterStr << "\n";
-
-//  registerContents[reg] = location;
-//  locationMap.insert_or_assign(location, reg);
+  Register varRegister = registerWithAddressForVariable(var);
+  *file->fileStream << "mov [" << varRegister << "], " << locRegisterStr << "\n";
 }
 
 Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes) {
-  BlockScope::Variable var = blockScopeStack.top().variables.at(ident);
+  BlockScope::Variable var = blockScopeStack.top().searchForVariable(ident);
+
+  Register varRegister = registerWithAddressForVariable(var);
 
   Register locRegister = getAvailableRegister();
   std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
@@ -499,7 +543,7 @@ Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes)
     // Zero 64bit register if only a part of it will be filled
     *file->fileStream << "xor " << locRegister << ", " << locRegister << "\n";
   }
-  *file->fileStream << "mov " << locRegisterStr << ", [rsp - " << var.offset << "]\n";
+  *file->fileStream << "mov " << locRegisterStr << ", [" << varRegister << "]\n";
 
   registerContents[locRegister] = var.location;
   locationMap.insert_or_assign(var.location, locRegister);
@@ -530,6 +574,20 @@ void Generator::moveToRegister(Register reg, Location* location) {
 
   registerContents[reg] = location;
   locationMap.insert_or_assign(location, reg);
+}
+
+void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
+  registerContents[reg] = newLoc;
+
+  locationMap.insert_or_assign(newLoc, reg);
+  locationMap.erase(oldLoc);
+}
+
+void Generator::removeLocation(Register reg, Location* oldLoc) {
+  registerContents[reg] = nullptr;
+  if (oldLoc) {
+    locationMap.erase(oldLoc);
+  }
 }
 
 Register Generator::getAvailableRegister() {

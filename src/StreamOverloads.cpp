@@ -267,6 +267,21 @@ std::ostream& operator<<(std::ostream& os, const Register& reg) {
     case RDI:
       os << "rdi";
       break;
+    case R8:
+      os << "r8";
+      break;
+    case R9:
+      os << "r9";
+      break;
+    case R10:
+      os << "r10";
+      break;
+    case R11:
+      os << "r11";
+      break;
+    case R15:
+      os << "r15";
+      break;
     default:
       os << "UNKNOWN_REGISTER(" << (int)reg << ")";
       break;
