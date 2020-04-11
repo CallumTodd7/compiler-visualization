@@ -43,7 +43,7 @@ constexpr static Register procCallReturnRegisterOrder[] = {
     Register::RDX,
 };
 #define TOTAL_CALLE_SAVED_REGISTERS 2
-constexpr static Register calleSavedRegisterS[] = { // Must be preserved across proc calls
+constexpr static Register calleSavedRegisters[] = { // Must be preserved across proc calls
     Register::RBX,
     //Register::R12, Register::R13, Register::R14,
     Register::R15,
@@ -163,8 +163,8 @@ public:
   Location* walkVariableIdent(ASTVariableIdent* node);
 
   void writeStringLiteralList(const std::string& str);
-  std::vector<Register> pushCallerSaved();
-  void popCallerSaved(std::vector<Register> savedRegisters);
+  std::vector<std::pair<Register, Location*>> pushCallerSaved();
+  void popCallerSaved(std::vector<std::pair<Register, Location*>> savedRegisters);
 
   void swapLocation(Register reg, Location* oldLoc, Location* newLoc);
   void removeLocation(Register reg, Location* oldLoc = nullptr);
@@ -180,9 +180,10 @@ public:
   Register registerWithAddressForVariable(BlockScope::Variable variable);
   void moveToMem(const std::string& ident, Location* loc, unsigned int bytes);
   Location* recallFromMem(const std::string& ident, unsigned int bytes);
+  void recallFromParamRegister(Location* location);
 
   void comment(const std::string& comment);
-  void recallFromParamRegister(Location* location);
+  void dumpRegisters();
 };
 
 

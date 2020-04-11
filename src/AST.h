@@ -11,6 +11,7 @@
 
 struct Location {
   int id;
+  bool isParameter = false;
 
   Location() : id(idCount++) {}
 

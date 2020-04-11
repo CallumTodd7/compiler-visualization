@@ -328,7 +328,9 @@ void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
   Location* loc = walkExpression(node->initalValueExpression);
   moveToMem(node->ident, loc, bytesOf(node->dataType));
 
-  removeLocation(loc);
+  if (!loc->isParameter) {
+    removeLocation(loc);
+  }
 
   comment("END VariableDeclaration");
 }
@@ -377,6 +379,8 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
   } else {
 
+    std::vector<Location*> parameterLocations;
+
     // Write head
     *file->fileStream << node->ident << ":\n";
 
@@ -394,6 +398,7 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
         var.parameter = param;
         var.location = new Location();
+        var.location->isParameter = true;
         var.dataType = parameter->dataType;
         var.stackHeight = scope.stackHeight;
 
@@ -417,7 +422,9 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
           case INTEGER: {
             // Use register
             param->paramRegister = procCallRegisterOrder[totalParamsInRegisters++];
-            swapLocation(param->paramRegister, nullptr, var.location);
+
+            registerContents[param->paramRegister] = var.location;
+            locationMap.insert_or_assign(var.location, param->paramRegister);
             break;
           }
           default:
@@ -427,6 +434,8 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
         proc.parameters.push_back(param);
         scope.variables.insert_or_assign(parameter->ident, var);
+
+        parameterLocations.push_back(var.location);
       }
 
       if (scope.parent) {
@@ -439,6 +448,11 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
     // Write tail
     *file->fileStream << "ret\n";
+
+    // Remove params from internal map
+    for (auto* loc : parameterLocations) {
+      removeLocation(loc);
+    }
 
   }
 
@@ -460,6 +474,9 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
   std::vector<Location*> paramLocs;
   std::vector<Register> requiredRegistersForParams;
 
+  // Always used for varargs count
+  requiredRegistersForParams.push_back(Register::RAX);
+
   for (size_t i = 0; i < node->parameters.size(); ++i) {
     paramLocs.push_back(walkExpression(node->parameters[i]));
 
@@ -477,7 +494,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
     }
   }
 
-  requireRegistersFree(requiredRegistersForParams);
+//  requireRegistersFree(requiredRegistersForParams);//TODO USE
 
   unsigned int registersUsed = 0;
   for (size_t i = 0; i < node->parameters.size(); ++i) {
@@ -505,8 +522,6 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
 
   *file->fileStream << "call " << node->ident << "\n";
 
-  popCallerSaved(savedRegisters);
-
   for (size_t i = 0; i < paramLocs.size(); ++i) {
     if (i < TOTAL_PROC_CALL_REGISTERS) {
       removeLocation(procCallRegisterOrder[i]);
@@ -514,6 +529,15 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
       std::cout << "Not implemented yet" << std::endl;
       file->fileStream->close();
       throw std::exception();
+    }
+  }
+
+  popCallerSaved(savedRegisters);
+
+  // Remove params from internal map
+  for (auto* loc : paramLocs) {
+    if (!loc->isParameter) {
+      removeLocation(loc);
     }
   }
 
@@ -527,7 +551,9 @@ void Generator::walkVariableAssignment(ASTVariableAssignment* node) {
   Location* loc = walkExpression(node->newValueExpression);
   moveToMem(node->ident, loc, bytesOf(var.dataType));
 
-  removeLocation(loc);
+  if (!loc->isParameter) {
+    removeLocation(loc);
+  }
 
   comment("END VariableAssignment");
 }
@@ -758,9 +784,6 @@ Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
       }
       case INTEGER: { // Use register
         node->location = var.location;
-        Register reg = var.parameter->paramRegister;
-        registerContents[reg] = node->location;
-        locationMap.insert_or_assign(node->location, reg);
         break;
       }
       default:
@@ -776,17 +799,26 @@ Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
   return node->location;
 }
 
-std::vector<Register> Generator::pushCallerSaved() {
+std::vector<std::pair<Register, Location*>> Generator::pushCallerSaved() {
   comment("BEGIN pushCallerSaved");
 
-  std::vector<Register> savedRegisters;
+  std::vector<std::pair<Register, Location*>> savedRegisters;
 
   for (int i = 0; i < TOTAL_REGISTERS; ++i) {
-    if (registerContents[i] != nullptr) {
-      auto reg = (Register) i;
+    auto reg = (Register) i;
 
-      *file->fileStream << "push " << reg << "\n";
-      savedRegisters.push_back(reg);
+    // TODO if 'reg' is in 'calleSavedRegister', then 'continue'.
+    // This is because calle saved registers must be
+    // preserved in all functions and won't be over ridden
+
+    Location* loc = registerContents[reg];
+    if (loc != nullptr) {
+      *file->fileStream << "push " << reg;
+      if (genComments) {
+        *file->fileStream << "; with " << loc;
+      }
+      *file->fileStream << "\n";
+      savedRegisters.emplace_back(reg, loc);
     }
   }
 
@@ -795,13 +827,21 @@ std::vector<Register> Generator::pushCallerSaved() {
   return savedRegisters;
 }
 
-void Generator::popCallerSaved(std::vector<Register> savedRegisters) {
+void Generator::popCallerSaved(std::vector<std::pair<Register, Location*>> savedRegisters) {
   comment("BEGIN popCallerSaved");
 
   for (size_t i = savedRegisters.size() - 1; savedRegisters.size() > i; --i) {
-    Register reg = savedRegisters[i];
+    Register reg = savedRegisters[i].first;
+    Location* loc = savedRegisters[i].second;
 
-    *file->fileStream << "pop " << reg << "\n";
+    *file->fileStream << "pop " << reg;
+    if (genComments) {
+      *file->fileStream << "; with " << loc;
+    }
+    *file->fileStream << "\n";
+
+
+    swapLocation(reg, registerContents[reg], loc);
   }
 
   comment("END popCallerSaved");
@@ -932,8 +972,8 @@ void Generator::moveToRegister(Register newRegister,
 void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
   registerContents[reg] = newLoc;
 
-  locationMap.insert_or_assign(newLoc, reg);
   locationMap.erase(oldLoc);
+  locationMap.insert_or_assign(newLoc, reg);
 }
 
 void Generator::removeLocation(Register reg, Location* oldLoc) {
@@ -1058,6 +1098,39 @@ void Generator::comment(const std::string& comment) {
   if (!genComments) return;
 
   *file->fileStream << ";" << comment << "\n";
+}
+
+void Generator::dumpRegisters() {
+  int regCount = 0;
+  int locCount = 0;
+
+  *file->fileStream << ";Dump registers:\n";
+  for (int i = 0; i < TOTAL_REGISTERS; ++i) {
+    auto reg = (Register)i;
+    Location* loc = registerContents[reg];
+    if (loc) {
+      *file->fileStream << "; - " << reg << ": " << loc->id << "\n";
+      regCount++;
+    } else {
+      *file->fileStream << "; - " << reg << ": -" << "\n";
+    }
+  }
+
+  *file->fileStream << ";Dump locations:\n";
+  for (auto pair : locationMap) {
+    Location* loc = pair.first;
+    Register reg = pair.second;
+    if (reg != Register::NONE) {
+      *file->fileStream << "; - " << loc->id << ": " << reg << "\n";
+      locCount++;
+    } else {
+      *file->fileStream << "; - " << loc->id << ": -" << "\n";
+    }
+  }
+
+  if (locCount != regCount) {
+    *file->fileStream << "; !!!MISMATCH!!!\n";
+  }
 }
 
 #pragma clang diagnostic pop
