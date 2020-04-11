@@ -298,7 +298,7 @@ std::ostream& operator<<(std::ostream& os, const Register& reg) {
   return os;
 }
 
-int Location::idCount = 0;//TODO FIXME Move to proper file
+unsigned int Location::idCount = 0;//TODO FIXME Move to proper file
 
 std::ostream& operator<<(std::ostream& os, const Location& location) {
   os << "loc" << location.id;
@@ -307,6 +307,11 @@ std::ostream& operator<<(std::ostream& os, const Location& location) {
 
 std::ostream& operator<<(std::ostream& os, const Location* location) {
   os << *location;
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Label& label) {
+  os << "_lbl" << label.id;
   return os;
 }
 
@@ -392,8 +397,10 @@ void ASTIf::print(std::ostream& os, unsigned int level) const {
 void ASTReturn::print(std::ostream& os, unsigned int level) const {
   ASTNode::print(os, level);
 
-  os << "\n";
-  this->expression->print(os, ++level);
+  if (this->expression) {
+    os << "\n";
+    this->expression->print(os, ++level);
+  }
 }
 
 void ASTLiteral::print(std::ostream& os, unsigned int level) const {

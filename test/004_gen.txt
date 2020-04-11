@@ -5,11 +5,27 @@ extern void puts(u8 str)
 
 //*
 void dave(u8 a, u8 b) {
-  puts("Dave");
-  u8 c = a;
+  u8 c = b;
+  while (1) {
+    if (c <= 0) {
+      break;
+    }
+    if (c == 3) {
+      puts("Three!");
+      c = c - 1;
+      continue;
+    }
+    puts("Dave");
+    c = c - 1;
+  }
   printf("a %d\n", a);
   printf("b %d\n", b);
   printf("c %d\n", c);
+  if (a == b) {
+    puts("match");
+  } else {
+    puts("nope");
+  }
 }
 //*/
 
@@ -27,5 +43,5 @@ void main() {
     printf("num3: %d\n", num3);
   }
   //*/
-  dave(72, 82);
+  dave(72, 5);
 }

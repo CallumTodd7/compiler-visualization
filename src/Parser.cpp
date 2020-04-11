@@ -245,7 +245,7 @@ ASTIf* Parser::parseIf() {
   node->trueStatement = parseBlock();
 
   if (accept(Token::Type::TOKEN_KEYWORD_ELSE)) {
-    if (peekToken()->type == Token::Type::TOKEN_BRACE_OPEN) {
+    if (currentToken()->type == Token::Type::TOKEN_BRACE_OPEN) {
       node->falseStatement = parseBlock();
     } else {
       node->falseStatement = parseIf();

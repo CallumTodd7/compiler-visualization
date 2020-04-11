@@ -10,13 +10,13 @@
 #include "Types.h"
 
 struct Location {
-  int id;
+  unsigned int id;
   bool isParameter = false;
 
   Location() : id(idCount++) {}
 
 private:
-  static int idCount;
+  static unsigned int idCount;
 
 };
 std::ostream& operator<<(std::ostream& os, const Location& location);
@@ -126,7 +126,7 @@ struct ASTWhile : ASTStatement {
   void print(std::ostream& os, unsigned int level) const override;
 
   ASTExpression* conditional = nullptr;
-  ASTStatement* body = nullptr;
+  ASTBlock* body = nullptr;
 };
 
 struct ASTContinue : ASTStatement {

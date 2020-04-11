@@ -55,6 +55,27 @@ std::string registerTo8BitEquivalent(Register reg);
 std::string registerTo16BitEquivalent(Register reg);
 std::string registerTo32BitEquivalent(Register reg);
 
+struct Label {
+  unsigned int id;
+
+  explicit Label(bool exists = true) {
+    if (exists) {
+      this->id = idCount++;
+    } else {
+      this->id = 0;
+    }
+  }
+
+  bool exists() {
+    return id != 0;
+  }
+
+private:
+  static unsigned int idCount;
+
+};
+std::ostream& operator<<(std::ostream& os, const Label& location);
+
 enum ParameterClass {
   NO_CLASS = 0,
   MEMORY,
@@ -99,6 +120,11 @@ struct BlockScope {
 
   std::map<std::string, Variable> variables;
   std::map<std::string, Procedure> procedures;
+
+  bool isProcedureBlock = false;
+
+  Label startLabel = Label(false);
+  Label endLabel = Label(false);
 
   Variable searchForVariable(const std::string& ident) {
     try {
@@ -166,9 +192,9 @@ public:
   std::vector<std::pair<Register, Location*>> pushCallerSaved();
   void popCallerSaved(std::vector<std::pair<Register, Location*>> savedRegisters);
 
-  void swapLocation(Register reg, Location* oldLoc, Location* newLoc);
-  void removeLocation(Register reg, Location* oldLoc = nullptr);
-  void removeLocation(Location* oldLoc);
+  void swapLocation(Register reg, Location* oldLoc, Location* newLoc, bool forceRmParam = false);
+  void removeLocation(Register reg, Location* oldLoc = nullptr, bool forceRmParam = false);
+  void removeLocation(Location* oldLoc, bool forceRmParam = false);
   void requireRegistersFree(const std::vector<Register>& registers);
   void moveToRegister(Register reg, Location* location, const std::vector<Register>& excludingRegisters = {});
   Register getAvailableRegister();
@@ -176,6 +202,7 @@ public:
   Register getRegisterForConst(Location* location, unsigned long long constant);
   Register getRegisterForConst(Location* location, const std::string& constant);
   Register getRegisterFor(Location* location, bool isConstant = false, const std::string& constant = "");
+  Register getRegisterForCopy(Location* location, Location* newLocation);
 
   Register registerWithAddressForVariable(BlockScope::Variable variable);
   void moveToMem(const std::string& ident, Location* loc, unsigned int bytes);
@@ -183,7 +210,7 @@ public:
   void recallFromParamRegister(Location* location);
 
   void comment(const std::string& comment);
-  void dumpRegisters();
+  void dumpRegisters(bool mismatchCheckOnly = false);
 };
 
 

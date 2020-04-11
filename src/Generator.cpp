@@ -105,6 +105,8 @@ ParameterClass identifyParamClass(DataType dataType) {
   }
 }
 
+unsigned int Label::idCount = 1;
+
 Generator::Generator(ASTNode* astRoot, std::string filepath) {
   this->astRoot = astRoot;
 
@@ -328,9 +330,7 @@ void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
   Location* loc = walkExpression(node->initalValueExpression);
   moveToMem(node->ident, loc, bytesOf(node->dataType));
 
-  if (!loc->isParameter) {
-    removeLocation(loc);
-  }
+  removeLocation(loc);
 
   comment("END VariableDeclaration");
 }
@@ -386,6 +386,10 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
     // Write block
     walkBlock(node->block, false, [&](BlockScope& scope) -> void {
+      scope.isProcedureBlock = true;
+      // TODO set scope.endLabel (required for `return`)
+      // What do we do for procs with return data types?
+
       // Add procedure to block's scope
       BlockScope::Procedure proc = BlockScope::Procedure();
 
@@ -451,7 +455,7 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
     // Remove params from internal map
     for (auto* loc : parameterLocations) {
-      removeLocation(loc);
+      removeLocation(loc, true);
     }
 
   }
@@ -464,6 +468,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
 
   auto proc = blockScopeStack.top().searchForProcedure(node->ident);
 
+  // TODO expand check for matching data types too (i.e. Check the proc signature)
   if (proc.parameters.size() != node->parameters.size()) {
     std::cout << "Parameter mismatch! "
               << "Proc decl has " << proc.parameters.size() << ", "
@@ -524,7 +529,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
 
   for (size_t i = 0; i < paramLocs.size(); ++i) {
     if (i < TOTAL_PROC_CALL_REGISTERS) {
-      removeLocation(procCallRegisterOrder[i]);
+      removeLocation(procCallRegisterOrder[i], nullptr, true);
     } else {
       std::cout << "Not implemented yet" << std::endl;
       file->fileStream->close();
@@ -536,9 +541,7 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
 
   // Remove params from internal map
   for (auto* loc : paramLocs) {
-    if (!loc->isParameter) {
-      removeLocation(loc);
-    }
+    removeLocation(loc);
   }
 
   comment("END ProcedureCall");
@@ -551,31 +554,161 @@ void Generator::walkVariableAssignment(ASTVariableAssignment* node) {
   Location* loc = walkExpression(node->newValueExpression);
   moveToMem(node->ident, loc, bytesOf(var.dataType));
 
-  if (!loc->isParameter) {
-    removeLocation(loc);
-  }
+  removeLocation(loc);
 
   comment("END VariableAssignment");
 }
 
 void Generator::walkIf(ASTIf* node) {
+  comment("BEGIN If");
 
+  Label labelFalse(node->falseStatement), labelEnd;
+
+  // Condition
+  walkExpression(node->conditional);
+  auto* tempLoc = new Location();
+  Register regConditionalResult = getRegisterForCopy(node->conditional->location, tempLoc);
+
+  *file->fileStream << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
+  removeLocation(regConditionalResult, tempLoc);
+  removeLocation(node->conditional->location, false);
+
+  if (node->falseStatement) {
+    *file->fileStream << "jz " << labelFalse << "\n";
+  } else {
+    *file->fileStream << "jz " << labelEnd << "\n";
+  }
+
+  // True
+  walkStatement(node->trueStatement);
+
+  // False
+  if (node->falseStatement) {
+    *file->fileStream << "jmp " << labelEnd << "\n";
+    *file->fileStream << labelFalse << ":\n";
+
+    walkStatement(node->falseStatement);
+  }
+
+  // End
+  *file->fileStream << labelEnd << ":\n";
+
+  comment("END If");
 }
 
 void Generator::walkWhile(ASTWhile* node) {
+  comment("BEGIN While");
 
+  Label labelStart, labelEnd;
+
+  // Condition
+  *file->fileStream << labelStart << ":\n";
+
+  walkExpression(node->conditional);
+  auto* tempLoc = new Location();
+  Register regConditionalResult = getRegisterForCopy(node->conditional->location, tempLoc);
+
+  *file->fileStream << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
+  removeLocation(regConditionalResult, tempLoc);
+  removeLocation(node->conditional->location, false);
+
+  *file->fileStream << "jz " << labelEnd << "\n";
+
+  // Body
+  walkBlock(node->body, false, [labelStart, labelEnd](BlockScope& scope) -> void {
+    scope.startLabel = labelStart;
+    scope.endLabel = labelEnd;
+  });
+
+  *file->fileStream << "jmp " << labelStart << "\n";
+
+  // End
+  *file->fileStream << labelEnd << ":\n";
+
+  comment("END While");
 }
 
 void Generator::walkContinue(ASTContinue* node) {
+  comment("BEGIN Continue");
 
+  BlockScope* scope = &blockScopeStack.top();
+  while (scope) {
+    if (scope->isProcedureBlock) {
+      break;
+    }
+    if (scope->startLabel.exists()) {
+      // Cleanly end blocks before jump
+      unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
+      for (unsigned int i = 0; i < stackHeightDist; ++i) {
+        // Reset stackbase pointer & Dealloc local var space on stack
+        *file->fileStream << "mov rsp, rbp\n";
+        *file->fileStream << "pop rbp\n";
+      }
+
+      // Jump
+      *file->fileStream << "jmp " << scope->startLabel << "\n";
+      break;
+    } else {
+      scope = scope->parent;
+    }
+  }
+
+  comment("END Continue");
 }
 
 void Generator::walkBreak(ASTBreak* node) {
+  comment("BEGIN Break");
 
+  BlockScope* scope = &blockScopeStack.top();
+  while (scope) {
+    if (scope->isProcedureBlock) {
+      break;
+    }
+    if (scope->endLabel.exists()) {
+      // Cleanly end blocks before jump
+      unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
+      for (unsigned int i = 0; i < stackHeightDist; ++i) {
+        // Reset stackbase pointer & Dealloc local var space on stack
+        *file->fileStream << "mov rsp, rbp\n";
+        *file->fileStream << "pop rbp\n";
+      }
+
+      // Jump
+      *file->fileStream << "jmp " << scope->endLabel << "\n";
+      break;
+    } else {
+      scope = scope->parent;
+    }
+  }
+
+  comment("END Break");
 }
 
 void Generator::walkReturn(ASTReturn* node) {
+  comment("BEGIN Return");
 
+  BlockScope* scope = &blockScopeStack.top();
+  while (scope) {
+    if (scope->isProcedureBlock) {
+      if (scope->endLabel.exists()) {
+        // Cleanly end blocks before jump
+        unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
+        for (unsigned int i = 0; i < stackHeightDist; ++i) {
+          // Reset stackbase pointer & Dealloc local var space on stack
+          *file->fileStream << "mov rsp, rbp\n";
+          *file->fileStream << "pop rbp\n";
+        }
+
+        // Jump
+        *file->fileStream << "jmp " << scope->endLabel << "\n";
+        break;
+      }
+      break;
+    }
+    scope = scope->parent;
+  }
+
+  comment("END Return");
 }
 
 Location* Generator::walkBinOp(ASTBinOp* node) {
@@ -585,10 +718,13 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
   // Special case for Logical Or: Don't walk right side if left is true
   if (node->op == ExpressionOperatorType::LOGICAL_OR) {
     walkExpression(node->left);
-    Register regLeft = getRegisterFor(node->left->location);
+    auto* tempLeftLoc = new Location();
+    Register regLeft = getRegisterForCopy(node->left->location, tempLeftLoc);
 
     walkExpression(node->right);
     Register regRight = getRegisterFor(node->right->location);
+
+    removeLocation(node->left->location, false);
 
     std::cout << "LOGICAL_OR not implemented" << std::endl;
     file->fileStream->close();
@@ -600,29 +736,30 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
 
   walkExpression(node->left);
   walkExpression(node->right);
-  Register regLeft = getRegisterFor(node->left->location);
+  auto* tempLeftLoc = new Location();
+  Register regLeft = getRegisterForCopy(node->left->location, tempLeftLoc);
   Register regRight = getRegisterFor(node->right->location);
 
   switch (node->op) {
     case ExpressionOperatorType::ADD:
       *file->fileStream << "add " << regLeft << ", " << regRight << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MINUS:
       *file->fileStream << "sub " << regLeft << ", " << regRight << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MULTIPLY: {
       *file->fileStream << "imul " << regLeft << ", " << regRight << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::DIVIDE: {
       *file->fileStream << "idiv " << regLeft << ", " << regRight << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -631,7 +768,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setz " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -640,7 +777,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setnz " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -649,7 +786,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setl " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -658,7 +795,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setle " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -667,7 +804,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setg " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -676,7 +813,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
       *file->fileStream << "setge " << regLeft8BitStr << "\n";
       *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
-      swapLocation(regLeft, node->left->location, node->location);
+      swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
@@ -695,6 +832,8 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       throw std::exception();
   }
 
+  removeLocation(node->left->location, false);
+
   comment("END BinOp");
 
   return node->location;
@@ -704,24 +843,25 @@ Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
   comment("BEGIN UnaryOp");
 
   walkExpression(node->child);
-  Register regChild = getRegisterFor(node->child->location);
+  auto* tempChildLoc = new Location();
+  Register regChild = getRegisterForCopy(node->child->location, tempChildLoc);
 
   switch (node->op) {
     case ExpressionOperatorType::ADD:
-      swapLocation(regChild, node->child->location, node->location);
+      swapLocation(regChild, tempChildLoc, node->location);
       break;
     case ExpressionOperatorType::MINUS:
       *file->fileStream << "xor " << Register::R15 << ", " << Register::R15 << ";zero\n";
       *file->fileStream << "sub " << Register::R15 << ", " << regChild << "\n";
       *file->fileStream << "mov " << regChild << ", " << Register::R15 << "\n";
-      swapLocation(regChild, node->child->location, node->location);
+      swapLocation(regChild, tempChildLoc, node->location);
       break;
     case ExpressionOperatorType::LOGICAL_NOT: {
       *file->fileStream << "cmp " << regChild << ", " << 0 << "\n";
       std::string regChild8BitStr = registerTo8BitEquivalent(regChild);
       *file->fileStream << "sete " << regChild8BitStr << "\n";
       *file->fileStream << "movzx " << regChild << ", " << regChild8BitStr << "\n";
-      swapLocation(regChild, node->child->location, node->location);
+      swapLocation(regChild, tempChildLoc, node->location);
       break;
     }
     case ExpressionOperatorType::UNINITIALISED:
@@ -733,6 +873,8 @@ Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
       file->fileStream->close();
       throw std::exception();
   }
+
+  removeLocation(node->child->location, false);
 
   comment("END UnaryOp");
 
@@ -853,6 +995,10 @@ Register Generator::registerWithAddressForVariable(BlockScope::Variable variable
   unsigned int stackHeightDist = blockScopeStack.top().stackHeight - variable.stackHeight;
   unsigned int offset = variable.offset;
 
+#ifndef NDEBUG
+  dumpRegisters(true);
+#endif
+
   if (stackHeightDist > 0) {
     *file->fileStream << "mov " << reg << ", [rbp]\n";
     for (unsigned int i = 0; i < stackHeightDist - 1; ++i) {
@@ -889,6 +1035,10 @@ void Generator::moveToMem(const std::string& ident, Location* location, unsigned
 
 Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes) {
   BlockScope::Variable var = blockScopeStack.top().searchForVariable(ident);
+
+#ifndef NDEBUG
+  dumpRegisters(true);
+#endif
 
   Register varRegister = registerWithAddressForVariable(var);
 
@@ -939,6 +1089,10 @@ void Generator::moveToRegister(Register newRegister,
     return;
   }
 
+#ifndef NDEBUG
+  dumpRegisters(true);
+#endif
+
   if (registerContents[newRegister] != nullptr) {
     std::cout << "WARNING: Register " << newRegister
               << " already has contents (" << registerContents[newRegister]
@@ -969,15 +1123,25 @@ void Generator::moveToRegister(Register newRegister,
   locationMap.insert_or_assign(location, newRegister);
 }
 
-void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
+void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc, bool forceRmParam) {
   registerContents[reg] = newLoc;
 
-  locationMap.erase(oldLoc);
+  if (oldLoc && (!oldLoc->isParameter || forceRmParam)) {
+    locationMap.erase(oldLoc);
+  }
   locationMap.insert_or_assign(newLoc, reg);
 }
 
-void Generator::removeLocation(Register reg, Location* oldLoc) {
+void Generator::removeLocation(Register reg, Location* oldLoc, bool forceRmParam) {
   Location* existingLoc = registerContents[reg];
+
+  if (!forceRmParam) {
+    if (oldLoc) {
+      if (oldLoc->isParameter) return;
+    } else {
+      if (existingLoc->isParameter) return;
+    }
+  }
 
   registerContents[reg] = nullptr;
 
@@ -988,7 +1152,11 @@ void Generator::removeLocation(Register reg, Location* oldLoc) {
   }
 }
 
-void Generator::removeLocation(Location* oldLoc) {
+void Generator::removeLocation(Location* oldLoc, bool forceRmParam) {
+  if (oldLoc->isParameter && !forceRmParam) {
+    return;
+  }
+
   Register reg;
   try {
     reg = locationMap.at(oldLoc);
@@ -1078,6 +1246,10 @@ Register Generator::getRegisterFor(Location* location, bool isConstant, const st
 
   // No, then we'll put it in an available one
   if (availableRegister != Register::NONE) {
+#ifndef NDEBUG
+    dumpRegisters(true);
+#endif
+
     if (isConstant) {
       *file->fileStream << "mov " << availableRegister << ", " << constant << "\n";
       registerContents[availableRegister] = location;
@@ -1094,42 +1266,105 @@ Register Generator::getRegisterFor(Location* location, bool isConstant, const st
   throw std::exception();
 }
 
+Register Generator::getRegisterForCopy(Location* location, Location* newLocation) {
+  Register newRegister = getAvailableRegister();
+
+#ifndef NDEBUG
+  dumpRegisters(true);
+#endif
+
+  Register oldRegister = locationMap.at(location);
+  if (genComments) {
+    *file->fileStream << ";mov " << *location << " to " << newRegister << "\n";
+  }
+  *file->fileStream << "mov " << newRegister << ", " << oldRegister << "\n";
+
+  registerContents[newRegister] = location;
+  locationMap.insert_or_assign(newLocation, newRegister);
+
+  return newRegister;
+}
+
 void Generator::comment(const std::string& comment) {
   if (!genComments) return;
 
   *file->fileStream << ";" << comment << "\n";
 }
 
-void Generator::dumpRegisters() {
+void Generator::dumpRegisters(bool mismatchCheckOnly) {
   int regCount = 0;
   int locCount = 0;
 
-  *file->fileStream << ";Dump registers:\n";
+  // Count registers
   for (int i = 0; i < TOTAL_REGISTERS; ++i) {
     auto reg = (Register)i;
     Location* loc = registerContents[reg];
     if (loc) {
-      *file->fileStream << "; - " << reg << ": " << loc->id << "\n";
       regCount++;
-    } else {
-      *file->fileStream << "; - " << reg << ": -" << "\n";
     }
   }
 
-  *file->fileStream << ";Dump locations:\n";
+  // Count locations
+  for (auto pair : locationMap) {
+    Register reg = pair.second;
+    if (reg != Register::NONE) {
+      locCount++;
+    }
+  }
+
+  // Return if no mismatch
+  if (mismatchCheckOnly && locCount == regCount) {
+    return;
+  }
+
+  // Print registers
+  if (genComments) {
+    *file->fileStream << ";Dump registers:\n";
+  }
+  std::cout << "Dump registers:" << std::endl;
+  for (int i = 0; i < TOTAL_REGISTERS; ++i) {
+    auto reg = (Register)i;
+    Location* loc = registerContents[reg];
+    if (loc) {
+      if (genComments) {
+        *file->fileStream << "; - " << reg << ": " << loc->id << "\n";
+      }
+      std::cout << "- " << reg << ": " << loc->id << std::endl;
+    } else {
+      if (genComments) {
+        *file->fileStream << "; - " << reg << ": -" << "\n";
+      }
+      std::cout << "- " << reg << ": -" << std::endl;
+    }
+  }
+
+  // Print locations
+  if (genComments) {
+    *file->fileStream << ";Dump locations:\n";
+  }
+  std::cout << "Dump locations:" << std::endl;
   for (auto pair : locationMap) {
     Location* loc = pair.first;
     Register reg = pair.second;
     if (reg != Register::NONE) {
-      *file->fileStream << "; - " << loc->id << ": " << reg << "\n";
-      locCount++;
+      if (genComments) {
+        *file->fileStream << "; - " << loc->id << ": " << reg << "\n";
+      }
+      std::cout << "- " << loc->id << ": " << reg << std::endl;
     } else {
-      *file->fileStream << "; - " << loc->id << ": -" << "\n";
+      if (genComments) {
+        *file->fileStream << "; - " << loc->id << ": -" << "\n";
+      }
+      std::cout << "- " << loc->id << ": -" << std::endl;
     }
   }
 
+  // Print mismatch
   if (locCount != regCount) {
-    *file->fileStream << "; !!!MISMATCH!!!\n";
+    if (genComments) {
+      *file->fileStream << "; !!!MISMATCH!!!\n";
+    }
+    std::cout << "!!!MISMATCH!!!" << std::endl;
   }
 }
 
