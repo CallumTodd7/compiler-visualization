@@ -68,6 +68,9 @@ std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
     case Token::Type::TOKEN_LOGICAL_OR:
       os << "LOGICAL_OR";
       break;
+    case Token::Type::TOKEN_LOGICAL_NOT:
+      os << "LOGICAL_NOT";
+      break;
     case Token::Type::TOKEN_LESS_THAN:
       os << "LESS_THAN";
       break;
@@ -115,6 +118,9 @@ std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
       break;
     case Token::Type::TOKEN_KEYWORD_FOR:
       os << "KEYWORD_FOR";
+      break;
+    case Token::Type::TOKEN_KEYWORD_EXTERN:
+      os << "KEYWORD_EXTERN";
       break;
     default:
       os << "ERROR_TYPE_HAS_NO_STRING_VALUE";
@@ -228,6 +234,9 @@ std::ostream& operator<<(std::ostream& os, const ExpressionOperatorType& opType)
     case ExpressionOperatorType::LOGICAL_OR:
       os << "LOGICAL_OR";
       break;
+    case ExpressionOperatorType::LOGICAL_NOT:
+      os << "LOGICAL_NOT";
+      break;
     case ExpressionOperatorType::LESS_THAN:
       os << "LESS_THAN";
       break;
@@ -328,10 +337,16 @@ void ASTBlock::print(std::ostream& os, unsigned int level) const {
 
 void ASTProcedure::print(std::ostream& os, unsigned int level) const {
   ASTNode::print(os, level);
-  os << "(" << this->ident << ")";
+  os << "(";
+  if (this->isExternal) {
+    os << "extern: ";
+  }
+  os << this->ident << ")";
 
-  os << "\n";
-  this->block->print(os, ++level);
+  if (this->block) {
+    os << "\n";
+    this->block->print(os, ++level);
+  }
 }
 
 void ASTWhile::print(std::ostream& os, unsigned int level) const {

@@ -67,6 +67,7 @@ struct Token {
     TOKEN_KEYWORD_ELSE = 33,
     TOKEN_KEYWORD_WHILE = 34,
     TOKEN_KEYWORD_FOR = 35,
+    TOKEN_KEYWORD_EXTERN = 37,
   };
 
   enum class ValueType {

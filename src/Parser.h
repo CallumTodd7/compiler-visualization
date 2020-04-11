@@ -33,7 +33,7 @@ private:
 
   ASTStatement* parseStatement();
   ASTBlock* parseBlock();
-  ASTProcedure* parseProcedureDeclaration();
+  ASTProcedure* parseProcedureDeclaration(bool isExternal = false);
   ASTVariableDeclaration* parseVariableDeclaration(bool declaratorOnly = false);
   ASTVariableAssignment* parseVariableAssignment();
   ASTProcedureCall* parseProcedureCall();

@@ -68,7 +68,8 @@ ASTBlock* Parser::parse() {
   blockScopeStack.push(node);
 
   while (tokenStreamIndex < tokenStream.size()) {
-    node->statements.push_back(parseProcedureDeclaration());
+    bool isExternal = currentToken()->type == Token::TOKEN_KEYWORD_EXTERN;
+    node->statements.push_back(parseProcedureDeclaration(isExternal));
   }
 
   blockScopeStack.pop();
@@ -93,8 +94,13 @@ ASTBlock* Parser::parseBlock() {
   return node;
 }
 
-ASTProcedure* Parser::parseProcedureDeclaration() {
+ASTProcedure* Parser::parseProcedureDeclaration(bool isExternal) {
   auto node = new ASTProcedure();
+
+  node->isExternal = isExternal;
+  if (isExternal) {
+    expect(Token::Type::TOKEN_KEYWORD_EXTERN);
+  }
 
   node->returnType = parseTypeSpecifier();
 
@@ -112,7 +118,9 @@ ASTProcedure* Parser::parseProcedureDeclaration() {
     }
   }
 
-  node->block = parseBlock();
+  if (!isExternal) {
+    node->block = parseBlock();
+  }
 
   return node;
 }
@@ -193,6 +201,8 @@ ASTStatement* Parser::parseStatement() {
       return parseBreak();
     case Token::Type::TOKEN_KEYWORD_RETURN:
       return parseReturn();
+    case Token::Type::TOKEN_KEYWORD_EXTERN:
+      return parseProcedureDeclaration(true);
     case Token::Type::TOKEN_KEYWORD_VOID:
     case Token::Type::TOKEN_KEYWORD_U8:
     case Token::Type::TOKEN_KEYWORD_S8:

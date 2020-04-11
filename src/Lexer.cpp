@@ -240,6 +240,8 @@ Token Lexer::identifyKeyword(const LexerContext& lexerContext, const std::string
     return {lexerContext, Token::Type::TOKEN_KEYWORD_WHILE};
   } else if (keyword == "for") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_FOR};
+  } else if (keyword == "extern") {
+    return {lexerContext, Token::Type::TOKEN_KEYWORD_EXTERN};
   }
 
   return Token::errorToken(lexerContext);

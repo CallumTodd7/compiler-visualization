@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <functional>
 #include "Generator.h"
 #include "AST.h"
 
@@ -93,6 +94,17 @@ std::string registerTo32BitEquivalent(Register reg) {
   throw std::exception();
 }
 
+ParameterClass identifyParamClass(DataType dataType) {
+  switch (dataType) {
+    case DataType::U8: return INTEGER;
+    case DataType::S8: return INTEGER;
+
+    case DataType::UNINITIALISED:
+    case DataType::VOID:
+      throw std::exception();
+  }
+}
+
 Generator::Generator(ASTNode* astRoot, std::string filepath) {
   this->astRoot = astRoot;
 
@@ -109,16 +121,28 @@ Generator::~Generator() {
 
 void Generator::generate() {
   comment("BEGIN leading boilerplate");
-  *file->fileStream <<
-                    "global    main\n"
-                    "extern    printf\n"
-                    "extern    puts\n"
-                    "\n"
-                    "section   .text\n";
+  *file->fileStream << "global main\n";
   comment("END leading boilerplate");
 
   if (astRoot->type == ASTType::BLOCK) {
-    walkBlock(static_cast<ASTBlock*>(astRoot), true);
+    auto* block = static_cast<ASTBlock*>(astRoot);
+
+    comment("BEGIN externs");
+    for (auto& statement : block->statements) {
+      if (statement->type == ASTType::PROC_DECL) {
+        auto* procDecl = static_cast<ASTProcedure*>(statement);
+        if (procDecl->isExternal) {
+          *file->fileStream << "extern " << procDecl->ident << "\n";
+        }
+      }
+    }
+    comment("END externs");
+
+    comment("BEGIN program");
+    *file->fileStream << "section .text\n";
+
+    walkBlock(block, true);
+    comment("END program");
   } else {
     std::cout << "Root is not block. Bad." << std::endl;
     file->fileStream->close();
@@ -174,7 +198,9 @@ void Generator::writeStringLiteralList(const std::string& str) {
   }
 }
 
-void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
+void Generator::walkBlock(ASTBlock* node,
+                          bool isEntrypoint,
+                          const std::function<void(BlockScope&)>& initCallback) {
   comment("BEGIN Block");
 
   if (!isEntrypoint) {
@@ -190,22 +216,28 @@ void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
     scope.parent = &blockScopeStack.top();
   }
 
-  unsigned int totalLocalBytes = 0;
   for (auto statement : node->statements) {
     if (statement->type == ASTType::VARIABLE_DECL) {
       auto* statementNode = static_cast<ASTVariableDeclaration*>(statement);
 
       BlockScope::Variable var = BlockScope::Variable();
-      var.offset = totalLocalBytes;
+      var.offset = scope.totalLocalBytes;
       var.location = new Location();
       var.dataType = statementNode->dataType;
       var.stackHeight = scope.stackHeight;
       scope.variables.insert_or_assign(statementNode->ident, var);
 
-      totalLocalBytes += bytesOf(statementNode->dataType);
+      scope.totalLocalBytes += bytesOf(statementNode->dataType);
     }
   }
-  *file->fileStream << "sub rsp, " << totalLocalBytes << "\n";
+
+  if (initCallback) {
+    initCallback(scope);
+  }
+
+  if (scope.totalLocalBytes) {
+    *file->fileStream << "sub rsp, " << scope.totalLocalBytes << "\n";
+  }
 
   blockScopeStack.push(scope);
 
@@ -224,7 +256,7 @@ void Generator::walkBlock(ASTBlock* node, bool isEntrypoint) {
     *file->fileStream << "pop rbp\n";
   } else {
     // Dealloc local var space on stack
-    *file->fileStream << "add rsp, " << totalLocalBytes << "\n";
+    *file->fileStream << "add rsp, " << scope.totalLocalBytes << "\n";
   }
 
   comment("END Block");
@@ -296,15 +328,119 @@ void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
   Location* loc = walkExpression(node->initalValueExpression);
   moveToMem(node->ident, loc, bytesOf(node->dataType));
 
+  removeLocation(loc);
+
   comment("END VariableDeclaration");
 }
 
 void Generator::walkProcedureDeclaration(ASTProcedure* node) {
   comment("BEGIN ProcedureDeclaration");
 
-  *file->fileStream << node->ident << ":\n";
-  walkBlock(node->block);
-  *file->fileStream << "ret\n";
+  if (node->isExternal) {
+    comment("external: " + node->ident);
+
+    // Add procedure to block's scope
+    BlockScope::Procedure proc = BlockScope::Procedure();
+
+    unsigned int totalParamsInRegisters = 0;
+    for (auto parameter : node->parameters) {
+      BlockScope::Procedure::Parameter* param = new BlockScope::Procedure::Parameter(); //@LEAK
+      param->dataType = parameter->dataType;
+
+      if (totalParamsInRegisters < TOTAL_PROC_CALL_REGISTERS) {
+        // Enough registers
+        param->paramClass = ParameterClass::INTEGER;//TODO = identifyParamClass(param->dataType);
+      } else {
+        // Fallback to stack
+        param->paramClass = ParameterClass::MEMORY;
+      }
+
+      switch (param->paramClass) {
+        case MEMORY: {
+          // Use stack
+          break;
+        }
+        case INTEGER: {
+          // Use register
+          param->paramRegister = procCallRegisterOrder[totalParamsInRegisters++];
+          break;
+        }
+        default:
+          std::cout << "Not implemented" << std::endl;
+          throw std::exception();
+      }
+
+      proc.parameters.push_back(param);
+    }
+
+    blockScopeStack.top().procedures.insert_or_assign(node->ident, proc);
+
+  } else {
+
+    // Write head
+    *file->fileStream << node->ident << ":\n";
+
+    // Write block
+    walkBlock(node->block, false, [&](BlockScope& scope) -> void {
+      // Add procedure to block's scope
+      BlockScope::Procedure proc = BlockScope::Procedure();
+
+      // Add parameters to block's scope
+      unsigned int totalParamStackBytes = 0;
+      unsigned int totalParamsInRegisters = 0;
+      for (auto parameter : node->parameters) {
+        BlockScope::Variable var = BlockScope::Variable();
+        BlockScope::Procedure::Parameter* param = new BlockScope::Procedure::Parameter(); //@LEAK
+
+        var.parameter = param;
+        var.location = new Location();
+        var.dataType = parameter->dataType;
+        var.stackHeight = scope.stackHeight;
+
+        param->dataType = parameter->dataType;
+
+        if (totalParamsInRegisters < TOTAL_PROC_CALL_REGISTERS) {
+          // Enough registers
+          param->paramClass = ParameterClass::INTEGER;//TODO = identifyParamClass(param->dataType);
+        } else {
+          // Fallback to stack
+          param->paramClass = ParameterClass::MEMORY;
+        }
+
+        switch (param->paramClass) {
+          case MEMORY: {
+            // Use stack
+            var.offset = totalParamStackBytes;
+            totalParamStackBytes += bytesOf(parameter->dataType);
+            break;
+          }
+          case INTEGER: {
+            // Use register
+            param->paramRegister = procCallRegisterOrder[totalParamsInRegisters++];
+            swapLocation(param->paramRegister, nullptr, var.location);
+            break;
+          }
+          default:
+            std::cout << "Not implemented" << std::endl;
+            throw std::exception();
+        }
+
+        proc.parameters.push_back(param);
+        scope.variables.insert_or_assign(parameter->ident, var);
+      }
+
+      if (scope.parent) {
+        scope.parent->procedures.insert_or_assign(node->ident, proc);
+      } else {
+        std::cout << "Can't add procedure" << std::endl;
+        throw std::exception();
+      }
+    });
+
+    // Write tail
+    *file->fileStream << "ret\n";
+
+  }
 
   comment("END ProcedureDeclaration");
 }
@@ -312,41 +448,68 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 void Generator::walkProcedureCall(ASTProcedureCall* node) {
   comment("BEGIN ProcedureCall");
 
-  std::vector<Location*> paramLocs;
-  for (auto param : node->parameters) {
-    paramLocs.push_back(walkExpression(param));
-//    walkExpression(param);
+  auto proc = blockScopeStack.top().searchForProcedure(node->ident);
+
+  if (proc.parameters.size() != node->parameters.size()) {
+    std::cout << "Parameter mismatch! "
+              << "Proc decl has " << proc.parameters.size() << ", "
+              << "proc call has " << node->parameters.size() << std::endl;
+    throw std::exception();
   }
 
-  pushCallerSaved();
+  std::vector<Location*> paramLocs;
+  std::vector<Register> requiredRegistersForParams;
 
-  // Print f, expects
-//  *file->fileStream << "mov rdi, format\n"; //set 1st parameter (format)
-//  *file->fileStream << "mov rsi, rax\n"; //set 2nd parameter (current_number)
-  int possibleRegistersInCallBeforeStack = 2;
-  Register registerOrder[] = {
-      Register::RDI,
-      Register::RSI,
-  };
-  for (size_t i = 0; i < paramLocs.size(); ++i) {
-    if (i < possibleRegistersInCallBeforeStack) {
-      moveToRegister(registerOrder[i], paramLocs[i]);
-    } else {
-      std::cout << "Not implemented yet" << std::endl;
-      file->fileStream->close();
-      throw std::exception();
+  for (size_t i = 0; i < node->parameters.size(); ++i) {
+    paramLocs.push_back(walkExpression(node->parameters[i]));
+
+    switch (proc.parameters[i]->paramClass) {
+      case MEMORY:
+        break;
+      case INTEGER:
+        if (requiredRegistersForParams.size() <= TOTAL_PROC_CALL_REGISTERS) {
+          requiredRegistersForParams.push_back(proc.parameters[i]->paramRegister);
+        }
+        break;
+      default:
+        std::cout << "Not implemented" << std::endl;
+        throw std::exception();
     }
   }
-  *file->fileStream << "xor rax, rax\n"; //zero rax because printf is varargs
+
+  requireRegistersFree(requiredRegistersForParams);
+
+  unsigned int registersUsed = 0;
+  for (size_t i = 0; i < node->parameters.size(); ++i) {
+    switch (proc.parameters[i]->paramClass) {
+      case MEMORY: {
+        // Use stack
+        std::cout << "Not implemented yet" << std::endl;
+        file->fileStream->close();
+        throw std::exception();
+      }
+      case INTEGER: {
+        // Use register
+        Register reg = procCallRegisterOrder[registersUsed++];
+        moveToRegister(reg, paramLocs[i], requiredRegistersForParams);
+        break;
+      }
+      default:
+        std::cout << "Not implemented" << std::endl;
+        throw std::exception();
+    }
+  }
+  *file->fileStream << "xor rax, rax\n"; //zero rax because printf is varargs & no floats
+
+  auto savedRegisters = pushCallerSaved();
 
   *file->fileStream << "call " << node->ident << "\n";
 
-  popCallerSaved();
+  popCallerSaved(savedRegisters);
 
   for (size_t i = 0; i < paramLocs.size(); ++i) {
-    if (i < possibleRegistersInCallBeforeStack) {
-      Location* loc = paramLocs[i];
-      removeLocation(registerOrder[i], loc);
+    if (i < TOTAL_PROC_CALL_REGISTERS) {
+      removeLocation(procCallRegisterOrder[i]);
     } else {
       std::cout << "Not implemented yet" << std::endl;
       file->fileStream->close();
@@ -358,7 +521,15 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
 }
 
 void Generator::walkVariableAssignment(ASTVariableAssignment* node) {
+  comment("BEGIN VariableAssignment");
 
+  auto var = blockScopeStack.top().searchForVariable(node->ident);
+  Location* loc = walkExpression(node->newValueExpression);
+  moveToMem(node->ident, loc, bytesOf(var.dataType));
+
+  removeLocation(loc);
+
+  comment("END VariableAssignment");
 }
 
 void Generator::walkIf(ASTIf* node) {
@@ -574,29 +745,64 @@ Location* Generator::walkLiteral(ASTLiteral* node) {
 Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
   comment("BEGIN VariableIdent");
 
+  auto var = blockScopeStack.top().searchForVariable(node->ident);
   if (node->dataType == DataType::UNINITIALISED) {
-    auto var = blockScopeStack.top().searchForVariable(node->ident);
     node->dataType = var.dataType;
   }
-  node->location = recallFromMem(node->ident, bytesOf(node->dataType));
+
+  if (var.parameter) {
+    switch (var.parameter->paramClass) {
+      case MEMORY: { // Use stack
+        node->location = recallFromMem(node->ident, bytesOf(node->dataType));
+        break;
+      }
+      case INTEGER: { // Use register
+        node->location = var.location;
+        Register reg = var.parameter->paramRegister;
+        registerContents[reg] = node->location;
+        locationMap.insert_or_assign(node->location, reg);
+        break;
+      }
+      default:
+        std::cout << "Not implemented" << std::endl;
+        throw std::exception();
+    }
+  } else {
+    node->location = recallFromMem(node->ident, bytesOf(node->dataType));
+  }
 
   comment("END VariableIdent");
 
   return node->location;
 }
 
-void Generator::pushCallerSaved() {
+std::vector<Register> Generator::pushCallerSaved() {
   comment("BEGIN pushCallerSaved");
 
+  std::vector<Register> savedRegisters;
 
+  for (int i = 0; i < TOTAL_REGISTERS; ++i) {
+    if (registerContents[i] != nullptr) {
+      auto reg = (Register) i;
+
+      *file->fileStream << "push " << reg << "\n";
+      savedRegisters.push_back(reg);
+    }
+  }
 
   comment("END pushCallerSaved");
+
+  return savedRegisters;
 }
 
-void Generator::popCallerSaved() {
+void Generator::popCallerSaved(std::vector<Register> savedRegisters) {
   comment("BEGIN popCallerSaved");
 
+  for (size_t i = savedRegisters.size() - 1; savedRegisters.size() > i; --i) {
+    Register reg = savedRegisters[i];
 
+    *file->fileStream << "pop " << reg << "\n";
+  }
 
   comment("END popCallerSaved");
 }
@@ -615,9 +821,14 @@ Register Generator::registerWithAddressForVariable(BlockScope::Variable variable
   } else {
     *file->fileStream << "mov " << reg << ", rbp\n";
   }
-  offset += 1; // + 1 because we're using rbp instead of rsp
 
-  if (offset) {
+  if (variable.parameter) {
+    // Skips over procedure's return address and stackbase pointer on the stack
+    constexpr unsigned int parameterOffset = 8;
+
+    *file->fileStream << "add " << reg << ", " << (parameterOffset + offset) << "\n";
+  } else {
+    offset += 1; // + 1 because we're using rbp instead of rsp
     *file->fileStream << "sub " << reg << ", " << offset << "\n";
   }
 
@@ -655,29 +866,67 @@ Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes)
   return var.location;
 }
 
-void Generator::moveToRegister(Register reg, Location* location) {
-  if (registerContents[reg] == location) {
+void Generator::recallFromParamRegister(Location* location) {
+  Register newRegister = getAvailableRegister();
+
+  Register exitingRegister = locationMap.at(location);
+
+  if (genComments) {
+    *file->fileStream << ";mov " << location << " (in " << exitingRegister << ") to "
+      << newRegister << "\n";
+  }
+  *file->fileStream << "mov " << newRegister << ", " << exitingRegister << "\n";
+
+  registerContents[newRegister] = location;
+  locationMap.insert_or_assign(location, newRegister);
+}
+
+void Generator::requireRegistersFree(const std::vector<Register>& registers) {
+  for (auto reg : registers) {
+    // If register is not empty
+    if (registerContents[reg] != nullptr) {
+      Register newReg = getAvailableRegister(registers);
+      moveToRegister(newReg, registerContents[reg]);
+    }
+  }
+}
+
+void Generator::moveToRegister(Register newRegister,
+                               Location* location,
+                               const std::vector<Register>& excludingRegisters) {
+  if (registerContents[newRegister] == location) {
+    // Already there; do nothing
     return;
   }
 
-  if (registerContents[reg] != nullptr) {
-    std::cout << "WARNING: Register " << reg
-              << " already has contents (" << registerContents[reg]
-              << ") when asked to make way for: " << *location << std::endl;
+  if (registerContents[newRegister] != nullptr) {
+    std::cout << "WARNING: Register " << newRegister
+              << " already has contents (" << registerContents[newRegister]
+              << ") when asked to make way for " << *location
+              << " (Relocating)" << std::endl;
 
-    Location* loc = registerContents[reg];
-    locationMap.insert_or_assign(loc, Register::NONE);
+    Register freeRegister = getAvailableRegister(excludingRegisters);
+    Location* existingLoc = registerContents[newRegister];
+
+    if (genComments) {
+      *file->fileStream << ";mov " << *existingLoc << " to " << freeRegister
+                        << " (relocation)" << "\n";
+    }
+    *file->fileStream << "mov " << freeRegister << ", " << newRegister << "\n";
+
+    registerContents[freeRegister] = existingLoc;
+    locationMap.insert_or_assign(existingLoc, freeRegister);
   }
 
-
-  Register locRegister = locationMap.at(location);
+  Register oldRegister = locationMap.at(location);
   if (genComments) {
-    *file->fileStream << ";mov " << *location << " to " << reg << "\n";
+    *file->fileStream << ";mov " << *location << " to " << newRegister << "\n";
   }
-  *file->fileStream << "mov " << reg << ", " << locRegister << "\n";
+  *file->fileStream << "mov " << newRegister << ", " << oldRegister << "\n";
 
-  registerContents[reg] = location;
-  locationMap.insert_or_assign(location, reg);
+  registerContents[oldRegister] = nullptr;
+  registerContents[newRegister] = location;
+  locationMap.insert_or_assign(location, newRegister);
 }
 
 void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
@@ -688,10 +937,27 @@ void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc) {
 }
 
 void Generator::removeLocation(Register reg, Location* oldLoc) {
+  Location* existingLoc = registerContents[reg];
+
   registerContents[reg] = nullptr;
+
   if (oldLoc) {
     locationMap.erase(oldLoc);
+  } else {
+    locationMap.erase(existingLoc);
   }
+}
+
+void Generator::removeLocation(Location* oldLoc) {
+  Register reg;
+  try {
+    reg = locationMap.at(oldLoc);
+  } catch (std::out_of_range&) {
+    return;
+  }
+
+  registerContents[reg] = nullptr;
+  locationMap.erase(oldLoc);
 }
 
 Register Generator::getAvailableRegister() {
@@ -699,6 +965,33 @@ Register Generator::getAvailableRegister() {
 
   for (int i = 0; i < TOTAL_REGISTERS; ++i) {
     auto reg = (Register) i;
+    Location* loc = registerContents[i];
+
+    if (availableRegister == Register::NONE && loc == nullptr) {
+      availableRegister = reg;
+    }
+  }
+
+  if (availableRegister == Register::NONE) {
+    std::cout << "No available register!" << std::endl;
+    file->fileStream->close();
+    throw std::exception();
+  }
+
+  return availableRegister;
+}
+
+Register Generator::getAvailableRegister(const std::vector<Register>& excludingRegisters) {
+  Register availableRegister = Register::NONE;
+
+  for (int i = 0; i < TOTAL_REGISTERS; ++i) {
+    auto reg = (Register) i;
+
+    auto it = std::find(excludingRegisters.begin(), excludingRegisters.end(), reg);
+    if (it != excludingRegisters.end()) {
+      continue;
+    }
+
     Location* loc = registerContents[i];
 
     if (availableRegister == Register::NONE && loc == nullptr) {

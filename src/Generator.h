@@ -11,6 +11,7 @@
 
 enum Register {
   NONE = 1000,
+
   RAX = 0,
   RBX = 1,
   RCX = 2,
@@ -21,15 +22,50 @@ enum Register {
   R11 = 7,
   RSI = 8,
   RDI = 9,
+
   R15 = 15,
 };
 #define TOTAL_REGISTERS 10
 std::ostream& operator<<(std::ostream& os, const Register& reg);
 
+#define TOTAL_PROC_CALL_REGISTERS 6
+constexpr static Register procCallRegisterOrder[] = {
+    Register::RDI,
+    Register::RSI,
+    Register::RDX,
+    Register::RCX,
+    Register::R8,
+    Register::R9,
+};
+#define TOTAL_PROC_CALL_RETURN_REGISTERS 2
+constexpr static Register procCallReturnRegisterOrder[] = {
+    Register::RAX,
+    Register::RDX,
+};
+#define TOTAL_CALLE_SAVED_REGISTERS 2
+constexpr static Register calleSavedRegisterS[] = { // Must be preserved across proc calls
+    Register::RBX,
+    //Register::R12, Register::R13, Register::R14,
+    Register::R15,
+    //Register::RSP, Register::RBP,
+};
+
 std::string registerToByteEquivalent(Register reg, unsigned int bytes);
 std::string registerTo8BitEquivalent(Register reg);
 std::string registerTo16BitEquivalent(Register reg);
 std::string registerTo32BitEquivalent(Register reg);
+
+enum ParameterClass {
+  NO_CLASS = 0,
+  MEMORY,
+  INTEGER,
+  SSE,
+  SSEUP,
+  X87,
+  X87UP,
+  COMPLEX_X87,
+};
+ParameterClass identifyParamClass(DataType dataType);
 
 struct OutputFile {
   std::string filepath;
@@ -37,17 +73,32 @@ struct OutputFile {
 };
 
 struct BlockScope {
+  struct Procedure {
+    struct Parameter {
+      DataType dataType;
+      ParameterClass paramClass = ParameterClass::NO_CLASS;
+      Register paramRegister = Register::NONE;
+    };
+
+    std::vector<Parameter*> parameters;
+    DataType returnDataType;
+  };
   struct Variable {
     unsigned int stackHeight;
-    unsigned int offset;
+    unsigned int offset = 0;
     Location* location;
     DataType dataType;
+
+    Procedure::Parameter* parameter = nullptr;
   };
 
   BlockScope* parent = nullptr;
   unsigned int stackHeight;
 
+  unsigned int totalLocalBytes = 0;
+
   std::map<std::string, Variable> variables;
+  std::map<std::string, Procedure> procedures;
 
   Variable searchForVariable(const std::string& ident) {
     try {
@@ -57,6 +108,18 @@ struct BlockScope {
         return parent->searchForVariable(ident);
       } else {
         throw std::out_of_range("Variable " + ident + " not found!");
+      }
+    }
+  }
+
+  Procedure searchForProcedure(const std::string& ident) {
+    try {
+      return procedures.at(ident);
+    } catch (std::out_of_range&) {
+      if (parent) {
+        return parent->searchForProcedure(ident);
+      } else {
+        throw std::out_of_range("Procedure " + ident + " not found!");
       }
     }
   }
@@ -72,7 +135,7 @@ private:
   std::map<std::string, std::string> constants;
   unsigned int constantIndex = 0;
 
-  Location* registerContents[TOTAL_REGISTERS];
+  Location* registerContents[TOTAL_REGISTERS] = { nullptr };
   std::map<Location*, Register> locationMap;
 
   std::stack<BlockScope> blockScopeStack;
@@ -82,7 +145,7 @@ public:
   ~Generator();
 
   void generate();
-  void walkBlock(ASTBlock* node, bool isEntrypoint = false);
+  void walkBlock(ASTBlock* node, bool isEntrypoint = false, const std::function<void(BlockScope&)>& initCallback = nullptr);
   void walkStatement(ASTStatement* node);
   Location* walkExpression(ASTExpression* node);
   void walkVariableDeclaration(ASTVariableDeclaration* node);
@@ -100,13 +163,16 @@ public:
   Location* walkVariableIdent(ASTVariableIdent* node);
 
   void writeStringLiteralList(const std::string& str);
-  void pushCallerSaved();
-  void popCallerSaved();
+  std::vector<Register> pushCallerSaved();
+  void popCallerSaved(std::vector<Register> savedRegisters);
 
   void swapLocation(Register reg, Location* oldLoc, Location* newLoc);
-  void removeLocation(Register reg, Location* oldLoc);
-  void moveToRegister(Register reg, Location* location);
+  void removeLocation(Register reg, Location* oldLoc = nullptr);
+  void removeLocation(Location* oldLoc);
+  void requireRegistersFree(const std::vector<Register>& registers);
+  void moveToRegister(Register reg, Location* location, const std::vector<Register>& excludingRegisters = {});
   Register getAvailableRegister();
+  Register getAvailableRegister(const std::vector<Register>& excludingRegisters);
   Register getRegisterForConst(Location* location, unsigned long long constant);
   Register getRegisterForConst(Location* location, const std::string& constant);
   Register getRegisterFor(Location* location, bool isConstant = false, const std::string& constant = "");
@@ -116,6 +182,7 @@ public:
   Location* recallFromMem(const std::string& ident, unsigned int bytes);
 
   void comment(const std::string& comment);
+  void recallFromParamRegister(Location* location);
 };
 
 

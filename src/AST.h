@@ -92,6 +92,8 @@ struct ASTProcedure : ASTStatement {
 
   ASTBlock* parent = nullptr;
 
+  bool isExternal;
+
   DataType returnType = DataType::VOID;
   std::string ident;//TODO replace with atom
 
