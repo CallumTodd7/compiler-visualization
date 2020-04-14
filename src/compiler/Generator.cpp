@@ -122,6 +122,8 @@ Generator::~Generator() {
 }
 
 void Generator::generate() {
+  std::cout << "Generating asm" << std::endl;
+
   comment("BEGIN leading boilerplate");
   *file->fileStream << "global main\n";
   comment("END leading boilerplate");
@@ -151,7 +153,6 @@ void Generator::generate() {
     throw std::exception();
   }
 
-
   comment("BEGIN constants");
   *file->fileStream << "section .data\n";
   for (const auto& constantPair : constants) {
@@ -163,6 +164,9 @@ void Generator::generate() {
     *file->fileStream << ", 0\n";
   }
   comment("END constants");
+
+  file->fileStream->close();
+  std::cout << "Done! See: " << file->filepath << std::endl;
 }
 
 void Generator::writeStringLiteralList(const std::string& str) {

@@ -11,6 +11,10 @@ void ThreadSync::workerReady() {
   // If not running in UI mode, silently skip method
   if (!this->isActive) return;
 
+  if (this->shouldTerminate) {
+    throw ThreadTerminateException();
+  }
+
   // set ready flag
   // - allowing main thread to copy data
   isWorkerReady = true;
@@ -26,8 +30,8 @@ void ThreadSync::workerReady() {
 #endif
   {
     std::unique_lock<std::mutex> lck(mtx);
-    while (!(!isWorkerDone && isMainReady)) {
-      cv.wait(lck, [&] { return !isWorkerDone && isMainReady; });
+    while (!(isMainReady || isThreadDone())) {
+      cv.wait(lck, [&] { return isMainReady || isThreadDone(); });
     }
   }
 #if THREAD_DEBUG_MSG
@@ -45,6 +49,9 @@ void ThreadSync::workerReady() {
 void ThreadSync::mainReady(const std::function<void()>& callback) {
   assert(this->isActive);
 
+  // If worker is finished, silently skip method
+  if (this->isThreadDone()) return;
+
   // wait for worker's ready flag
   // - will only happen when the data is already saved
 #if THREAD_DEBUG_MSG
@@ -52,8 +59,8 @@ void ThreadSync::mainReady(const std::function<void()>& callback) {
 #endif
   {
     std::unique_lock<std::mutex> lck(mtx);
-    while (!(!isWorkerDone && isWorkerReady)) {
-      cv.wait(lck, [&] { return !isWorkerDone && isWorkerReady; });
+    while (!(isWorkerReady || isThreadDone())) {
+      cv.wait(lck, [&] { return isWorkerReady || isThreadDone(); });
     }
   }
 #if THREAD_DEBUG_MSG
@@ -61,7 +68,9 @@ void ThreadSync::mainReady(const std::function<void()>& callback) {
 #endif
 
   // allow data to be copied
-  callback();
+  if (!this->isThreadDone()) {
+    callback();
+  }
 
   // set ready flag
   // - allowing worker thread to continue
@@ -78,5 +87,32 @@ void ThreadSync::threadExit() {
 }
 
 bool ThreadSync::isThreadDone() {
-  return isWorkerDone;
+  return isWorkerDone || shouldTerminate;
+}
+
+void ThreadSync::terminateThread() {
+  shouldTerminate = true;
+  cv.notify_all();
+}
+
+void ThreadSync::runWorker() {
+  compilationThread = std::thread([=]{
+    workerExitCode = 0;
+    try {
+      workerExitCode = worker([&] {
+        this->workerReady();
+      });
+    } catch (ThreadTerminateException&) {
+      // Thread has been told to terminate; exit
+    }
+    threadExit();
+  });
+}
+
+void ThreadSync::join() {
+  compilationThread.join();
+}
+
+int ThreadSync::getWorkerExitCode() {
+  return workerExitCode;
 }
