@@ -1,6 +1,7 @@
 add_executable(cv
     main.cpp
     ThreadSync.cpp ThreadSync.h
+    Data.h Data.cpp
     compiler/Lexer.cpp compiler/Lexer.h
     compiler/StreamOverloads.cpp
     compiler/Parser.cpp compiler/Parser.h

@@ -19,49 +19,75 @@ VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
   font = new love::font::freetype::Font();
   love::Module::registerInstance(font);
 
-  graphics = new Graphics();
-  love::Module::registerInstance(graphics);
-  graphics->setBackgroundColor(love::Colorf(0, 0, 0, 1));
+  g = new Graphics();
+  love::Module::registerInstance(g);
+  g->setBackgroundColor(love::Colorf(0, 0, 0, 1));
 
   window = new Window();
   love::Module::registerInstance(window);
   window->setDisplaySleepEnabled(true);
-  window->setGraphics(graphics);
+  window->setGraphics(g);
 
-  window->setWindow();
+  love::window::WindowSettings windowSettings;
+  windowSettings.resizable = true;
+  window->setWindow(1280, 720, &windowSettings);
   window->setWindowTitle("Compiler Visualisation");
 }
 
 void VisualMain::requestNextData() {
-  threadSync->mainReady([&] {
-    std::cout << "Copy data" << std::endl;
+  threadSync->mainReady([&](const Data& data) {
+    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
+    switch (data.type) {
+      case Data::NOOP: break;
+      case Data::MODE_CHANGE:
+        setupNewMode(data.mode);
+        break;
+    }
   });
 }
 
 void VisualMain::init() {
-  graphics->setActive(true);
+  g->setActive(true);
   window->requestAttention(false);
 
-  text1 = buildText(graphics, "Test");
+  txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
 }
 
-bool hasRequestedData = false;
-void VisualMain::update(double dt) {
-//  std::cout << "dt: " << dt << ", time: " << timer->getTime() << std::endl;
-  if (((int) Timer::getTime()) % 2 == 0) {
-    if (!hasRequestedData) {
-      std::cout << "Req data" << std::endl;
-      hasRequestedData = true;
-      requestNextData();
-    }
-  } else {
-    hasRequestedData = false;
+void VisualMain::setupNewMode(Data::Mode newMode) {
+  switch (newMode) {
+    case Data::LEXER:
+      txtTitle->set(buildColoredString("Lexing", g));
+      break;
+    case Data::PARSER:
+      txtTitle->set(buildColoredString("Parsing", g));
+      break;
+    case Data::CODE_GEN:
+      txtTitle->set(buildColoredString("Code Generation", g));
+      break;
+    case Data::FINISHED:
+      txtTitle->set(buildColoredString("Done!", g));
+      break;
   }
 }
 
+//bool hasRequestedData = false;
+void VisualMain::update(double dt) {
+//  if (((int) Timer::getTime()) % 2 == 0) {
+//    if (!hasRequestedData) {
+//      std::cout << "Req data" << std::endl;
+//      hasRequestedData = true;
+      requestNextData();
+//      return;
+//    }
+//  } else {
+//    hasRequestedData = false;
+//  }
+}
+
 void VisualMain::draw() {
-  graphics->rectangle(Graphics::DrawMode::DRAW_LINE, 10, 10, 100, 100);
-  Matrix4 mat = graphics->getTransform();
+//  g->rectangle(Graphics::DrawMode::DRAW_LINE, 10, 10, 100, 100);
+
+  Matrix4 mat = g->getTransform();
   mat.translate(10, 10);
-  text1->draw(graphics, mat);
+  txtTitle->draw(g, mat);
 }

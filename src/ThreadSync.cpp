@@ -46,9 +46,11 @@ void ThreadSync::workerReady() {
   isMainReady = false;
 }
 
-void ThreadSync::mainReady(const std::function<void()>& callback) {
+void ThreadSync::mainReady(const std::function<void(const Data&)>& callback) {
   assert(this->isActive);
 
+  // If worker is not stated, silently skip method
+  if (!threadStarted) return;
   // If worker is finished, silently skip method
   if (this->isThreadDone()) return;
 
@@ -69,7 +71,7 @@ void ThreadSync::mainReady(const std::function<void()>& callback) {
 
   // allow data to be copied
   if (!this->isThreadDone()) {
-    callback();
+    callback(data);
   }
 
   // set ready flag
@@ -96,10 +98,12 @@ void ThreadSync::terminateThread() {
 }
 
 void ThreadSync::runWorker() {
+  threadStarted = true;
   compilationThread = std::thread([=]{
     workerExitCode = 0;
     try {
-      workerExitCode = worker([&] {
+      workerExitCode = worker([&](Data newData) {
+        data = newData;
         this->workerReady();
       });
     } catch (ThreadTerminateException&) {
@@ -110,7 +114,9 @@ void ThreadSync::runWorker() {
 }
 
 void ThreadSync::join() {
-  compilationThread.join();
+  if (threadStarted) {
+    compilationThread.join();
+  }
 }
 
 int ThreadSync::getWorkerExitCode() {

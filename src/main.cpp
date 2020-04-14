@@ -10,6 +10,7 @@
 #include "compiler/Parser.h"
 #include "compiler/Generator.h"
 #include "visuals/VisualMain.h"
+#include "Data.h"
 
 struct CliOptions {
   char* sourceFilepath = nullptr;
@@ -19,8 +20,13 @@ struct CliOptions {
 
 static CliOptions cliOptions;
 
-int compileWorker(const std::function<void()>& ready) {
+int compileWorker(const std::function<void(const Data&)>& ready) {
   printf("Source: %s\nDestination: %s\n\n", cliOptions.sourceFilepath, cliOptions.destFilepath);
+
+  ready({
+    .type =  Data::Type::MODE_CHANGE,
+    .mode = Data::Mode::LEXER,
+  });
 
   Lexer lexer((std::string(cliOptions.sourceFilepath)));
 
@@ -31,13 +37,17 @@ int compileWorker(const std::function<void()>& ready) {
     std::cout << "Lexer threw an exception: " << ex.what() << std::endl;
     return 1;
   }
-  ready();
+  ready({});
 
   printf("tokenStream length: %lu\n", tokenStream.size());
   for (const Token& token : tokenStream) {
     std::cout << token << std::endl;
   }
-  ready();
+
+  ready({
+      .type = Data::Type::MODE_CHANGE,
+      .mode = Data::Mode::PARSER,
+  });
 
   Parser parser(tokenStream);
   ASTBlock* root = nullptr;
@@ -48,7 +58,11 @@ int compileWorker(const std::function<void()>& ready) {
     std::cout << "Parser threw an exception: " << ex.what() << std::endl;
     return 1;
   }
-  ready();
+
+  ready({
+      .type = Data::Type::MODE_CHANGE,
+      .mode = Data::Mode::CODE_GEN,
+  });
 
   try {
     Generator generator(root, cliOptions.destFilepath);
@@ -57,7 +71,12 @@ int compileWorker(const std::function<void()>& ready) {
     std::cout << "Generator threw an exception: " << ex.what() << std::endl;
     return 1;
   }
-  ready();
+
+
+  ready({
+      .type = Data::Type::MODE_CHANGE,
+      .mode = Data::Mode::FINISHED,
+  });
 
   return 0;
 }
@@ -90,9 +109,10 @@ int main(int argc, char* argv[]) {
   }
 
   ThreadSync threadSync(cliOptions.hasUI, compileWorker);
-  threadSync.runWorker();
 
   if (cliOptions.hasUI) {
+    bool hasCompilerStarted = false;
+
     auto* timer = new love::timer::Timer();
     love::Module::registerInstance(timer);
 
@@ -110,6 +130,14 @@ int main(int argc, char* argv[]) {
         switch (evt.type) {
           case SDL_QUIT:
             isRunning = false;
+            break;
+          case SDL_KEYUP:
+            if (evt.key.keysym.sym == SDLK_ESCAPE) {
+              isRunning = false;
+            } else if (evt.key.keysym.sym == SDLK_SPACE && !hasCompilerStarted) {
+              threadSync.runWorker();
+              hasCompilerStarted = true;
+            }
             break;
         }
       }
@@ -133,6 +161,8 @@ int main(int argc, char* argv[]) {
 
     threadSync.terminateThread();
     SDL_Quit();
+  } else {
+    threadSync.runWorker();
   }
 
   threadSync.join();

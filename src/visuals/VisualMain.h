@@ -31,11 +31,13 @@ private:
   ThreadSync* threadSync;
 
   Timer* timer;
-  Graphics* graphics;
+  Graphics* g;
   Window* window;
   love::font::freetype::Font* font;
 
-  Text* text1 = nullptr;
+  Data::Mode state = Data::Mode::LEXER;
+
+  Text* txtTitle = nullptr;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
@@ -45,12 +47,13 @@ public:
   void draw();
 
   Graphics* getGraphics() {
-    return graphics;
+    return g;
   }
 
 private:
   void requestNextData();
 
+  void setupNewMode(Data::Mode newMode);
 
 };
 

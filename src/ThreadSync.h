@@ -9,6 +9,8 @@
 #include <functional>
 #include <thread>
 #include <utility>
+#include <vector>
+#include "Data.h"
 
 #define THREAD_DEBUG_MSG 0
 
@@ -32,17 +34,20 @@ private:
 
   bool shouldTerminate = false;
 
+  Data data;
+
+  bool threadStarted = false;
   std::thread compilationThread;
   int workerExitCode = 0;
-  std::function<int(const std::function<void()>&)> worker;
+  std::function<int(const std::function<void(const Data&)>&)> worker;
 
 public:
-  explicit ThreadSync(bool isActive, std::function<int(const std::function<void()>&)>  worker)
+  explicit ThreadSync(bool isActive, std::function<int(const std::function<void(Data)>&)>  worker)
     : isActive(isActive), worker(std::move(worker)) {
   }
 
   void workerReady();
-  void mainReady(const std::function<void()>& callback);
+  void mainReady(const std::function<void(const Data&)>& callback);
 
   void threadExit();
   bool isThreadDone();
