@@ -3,9 +3,12 @@
 //
 
 #include <iostream>
+#include <sstream>
 #include "Lexer.h"
+#include "../Data.h"
 
-Lexer::Lexer(const std::string& sourceFilepath) {
+Lexer::Lexer(const std::function<void(const Data&)>& ready, const std::string& sourceFilepath)
+    : ready(ready) {
   auto fileStream = new std::ifstream(sourceFilepath);
   file = new InputFile{
       .filepath = sourceFilepath,
@@ -24,6 +27,10 @@ std::vector<Token> Lexer::getTokenStream() {
   std::vector<Token> tokens;
 
   while (true) {
+    ready({
+      .mode = Data::Mode::LEXER,
+      .type = Data::Type::NOOP,
+    });
     Token token = nextToken();
     if (token.type == Token::Type::TOKEN_EOF) break;
     if (token.type == Token::Type::TOKEN_ERROR) throw std::exception();
@@ -54,12 +61,34 @@ Token Lexer::nextToken() {
 
   // Check for EOF
   if (currentChar < 0 && file->fileStream->eof()) {
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::END_OF_FILE,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = lexerContext,
+          });
     return Token::eofToken(lexerContext);
   }
 
   if (isdigit(currentChar)) {
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::START_NUMBER,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = lexerContext,
+          });
     return readNumber(lexerContext);
   } else if (currentChar == '"') {
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::START_STRING,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = lexerContext,
+          });
+
     // String
     std::string word;
 
@@ -71,8 +100,25 @@ Token Lexer::nextToken() {
     } while (currentChar != '"' && currentChar >= 0);
     advanceCursor();
 
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::END_STRING,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = getContext().sub1Pos(),
+              .string = word,
+          });
+
     return {lexerContext, Token::Type::TOKEN_STRING, word};
   } else if (isalpha(currentChar)) {
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::START_ALPHA,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = lexerContext,
+          });
+
     std::string word;
 
     // Read alpha in
@@ -84,17 +130,60 @@ Token Lexer::nextToken() {
     // Is keyword?
     Token keywordToken = identifyKeyword(lexerContext, word);
     if (keywordToken.type != Token::Type::TOKEN_ERROR) {
+      ready({
+                .mode = Data::Mode::LEXER,
+                .type = Data::Type::SPECIFIC,
+                .lexerState = Data::LexerState::END_ALPHA_KEYWORD,
+                .lexerContextStart = lexerContext,
+                .lexerContextEnd = getContext().sub1Pos(),
+                .string = (std::stringstream() << keywordToken.type).str(),
+            });
+
       return keywordToken;
     }
+
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::END_ALPHA_IDENT,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = getContext().sub1Pos(),
+              .string = word,
+          });
 
     // Must be identifier
     return {lexerContext, Token::Type::TOKEN_IDENTIFIER, word};
   } else {
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::START_OP,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = lexerContext,
+          });
+
     Token operatorToken = readOperator(lexerContext);
     if (operatorToken.type != Token::Type::TOKEN_ERROR) {
+      ready({
+                .mode = Data::Mode::LEXER,
+                .type = Data::Type::SPECIFIC,
+                .lexerState = Data::LexerState::END_OP,
+                .lexerContextStart = lexerContext,
+                .lexerContextEnd = getContext().sub1Pos(),
+                .string = (std::stringstream() << operatorToken.type).str(),
+            });
+
       return operatorToken;
     }
   }
+
+  ready({
+            .mode = Data::Mode::LEXER,
+            .type = Data::Type::SPECIFIC,
+            .lexerState = Data::LexerState::UNKNOWN,
+            .lexerContextStart = lexerContext,
+            .lexerContextEnd = lexerContext,
+        });
 
   // Error
   std::cout << lexerContext << " Lexer: Unknown character(s): " << currentChar << std::endl;
@@ -187,6 +276,16 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
   // Test for zero
   if (word.empty()) {
     if (leadingZeros > 0) {
+      ready({
+                .mode = Data::Mode::LEXER,
+                .type = Data::Type::SPECIFIC,
+                .lexerState = Data::LexerState::END_NUMBER,
+                .lexerContextStart = lexerContext,
+                .lexerContextEnd = getContext().sub1Pos(),
+                .string = word,
+                .number = 0,
+            });
+
       // Must be a zero
       return {lexerContext, Token::Type::TOKEN_INTEGER, 0};
     } else {
@@ -215,6 +314,16 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
     std::cout << lexerContext << " Lexer: Unknown error parsing number." << std::endl;
     return Token::errorToken(lexerContext);
   }
+
+  ready({
+            .mode = Data::Mode::LEXER,
+            .type = Data::Type::SPECIFIC,
+            .lexerState = Data::LexerState::END_NUMBER,
+            .lexerContextStart = lexerContext,
+            .lexerContextEnd = getContext().sub1Pos(),
+            .string = word,
+            .number = parsedNumber,
+        });
 
   return {lexerContext, Token::Type::TOKEN_INTEGER, parsedNumber};
 }

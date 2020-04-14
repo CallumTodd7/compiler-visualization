@@ -26,9 +26,10 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
   ready({
     .type =  Data::Type::MODE_CHANGE,
     .mode = Data::Mode::LEXER,
+    .filepath = std::string(cliOptions.sourceFilepath),
   });
 
-  Lexer lexer((std::string(cliOptions.sourceFilepath)));
+  Lexer lexer(ready, std::string(cliOptions.sourceFilepath));
 
   std::vector<Token> tokenStream;
   try {
@@ -37,7 +38,6 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
     std::cout << "Lexer threw an exception: " << ex.what() << std::endl;
     return 1;
   }
-  ready({});
 
   printf("tokenStream length: %lu\n", tokenStream.size());
   for (const Token& token : tokenStream) {

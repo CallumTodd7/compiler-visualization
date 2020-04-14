@@ -12,6 +12,8 @@
 
 #define EOF_CHAR -1
 
+struct Data;
+
 struct InputFile {
   std::string filepath;
   std::ifstream* fileStream;
@@ -23,6 +25,14 @@ struct LexerContext {
   int characterPos = -1;
 
   friend std::ostream& operator<<(std::ostream& os, const LexerContext& context);
+
+  LexerContext sub1Pos() {
+    return {
+      file,
+      lineNumber,
+      characterPos > 0 ? characterPos - 1 : 0,
+    };
+  }
 };
 
 struct Token {
@@ -135,8 +145,10 @@ private:
   int currentLinePos = 0;
   char currentChar = (char) 0;
 
+  const std::function<void(const Data&)>& ready;
+
 public:
-  explicit Lexer(const std::string& sourceFilepath);
+  Lexer(const std::function<void(const Data&)>& ready, const std::string& sourceFilepath);
   ~Lexer();
 
   std::vector<Token> getTokenStream();

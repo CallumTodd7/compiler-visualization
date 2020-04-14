@@ -12,6 +12,9 @@ std::ostream& operator<<(std::ostream& os, const Data::Type& type) {
     case Data::Type::MODE_CHANGE:
       os << "MODE_CHANGE";
       break;
+    case Data::SPECIFIC:
+      os << "SPECIFIC";
+      break;
   }
   return os;
 }

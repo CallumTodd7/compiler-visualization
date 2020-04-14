@@ -36,11 +36,27 @@ VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
 
 void VisualMain::requestNextData() {
   threadSync->mainReady([&](const Data& data) {
-    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
+//    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
     switch (data.type) {
-      case Data::NOOP: break;
-      case Data::MODE_CHANGE:
-        setupNewMode(data.mode);
+      case Data::Type::NOOP: break;
+      case Data::Type::MODE_CHANGE:
+        setupNewMode(data);
+        break;
+      case Data::Type::SPECIFIC:
+        switch (data.mode) {
+          case Data::LEXER:
+            handleLexerData(data);
+            break;
+          case Data::PARSER:
+            handleParserData(data);
+            break;
+          case Data::CODE_GEN:
+            handleCodeGenData(data);
+            break;
+          case Data::FINISHED:
+            // Finished here
+            break;
+        }
         break;
     }
   });
@@ -51,15 +67,22 @@ void VisualMain::init() {
   window->requestAttention(false);
 
   txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
+
+  sourceCode.init(g);
+  sourceCode.position.x = 10;
+  sourceCode.position.y = 40;
 }
 
-void VisualMain::setupNewMode(Data::Mode newMode) {
-  switch (newMode) {
+void VisualMain::setupNewMode(const Data& data) {
+  state = data.mode;
+  switch (state) {
     case Data::LEXER:
       txtTitle->set(buildColoredString("Lexing", g));
+      sourceCode.load(data.filepath);
       break;
     case Data::PARSER:
       txtTitle->set(buildColoredString("Parsing", g));
+      sourceCode.position.x += (float) g->getWidth() / 2.0f;
       break;
     case Data::CODE_GEN:
       txtTitle->set(buildColoredString("Code Generation", g));
@@ -70,18 +93,32 @@ void VisualMain::setupNewMode(Data::Mode newMode) {
   }
 }
 
-//bool hasRequestedData = false;
+void VisualMain::handleLexerData(const Data& data) {
+  sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
+                       data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+}
+
+void VisualMain::handleParserData(const Data& data) {
+
+}
+
+void VisualMain::handleCodeGenData(const Data& data) {
+
+}
+
+int pastTime = -1;
 void VisualMain::update(double dt) {
-//  if (((int) Timer::getTime()) % 2 == 0) {
-//    if (!hasRequestedData) {
-//      std::cout << "Req data" << std::endl;
-//      hasRequestedData = true;
-      requestNextData();
-//      return;
-//    }
-//  } else {
-//    hasRequestedData = false;
+//  if ((int) Timer::getTime() != pastTime) {
+//    requestNextData();
+//    pastTime = (int) Timer::getTime();
+//    return;
 //  }
+  if (pastTime > 13) {
+//    std::cout << "Req data" << std::endl;
+    requestNextData();
+    pastTime = -1;
+  }
+  pastTime++;
 }
 
 void VisualMain::draw() {
@@ -90,4 +127,8 @@ void VisualMain::draw() {
   Matrix4 mat = g->getTransform();
   mat.translate(10, 10);
   txtTitle->draw(g, mat);
+
+  if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
+    sourceCode.draw(g);
+  }
 }

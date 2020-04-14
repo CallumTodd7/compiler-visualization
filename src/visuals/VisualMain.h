@@ -15,6 +15,8 @@
 
 #include "../ThreadSync.h"
 
+#include "HighlightableText.h"
+
 using love::graphics::opengl::Shader;
 using love::graphics::ShaderStage;
 using love::graphics::opengl::Graphics;
@@ -38,6 +40,7 @@ private:
   Data::Mode state = Data::Mode::LEXER;
 
   Text* txtTitle = nullptr;
+  HighlightableText sourceCode;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
@@ -53,7 +56,10 @@ public:
 private:
   void requestNextData();
 
-  void setupNewMode(Data::Mode newMode);
+  void setupNewMode(const Data& data);
+  void handleLexerData(const Data& data);
+  void handleParserData(const Data& data);
+  void handleCodeGenData(const Data& data);
 
 };
 

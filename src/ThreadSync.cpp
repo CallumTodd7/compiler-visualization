@@ -102,10 +102,14 @@ void ThreadSync::runWorker() {
   compilationThread = std::thread([=]{
     workerExitCode = 0;
     try {
-      workerExitCode = worker([&](Data newData) {
-        data = newData;
-        this->workerReady();
-      });
+      if (isActive) {
+        workerExitCode = worker([&](Data newData) {
+          data = newData;
+          this->workerReady();
+        });
+      } else {
+        workerExitCode = worker([](Data newData) {});
+      }
     } catch (ThreadTerminateException&) {
       // Thread has been told to terminate; exit
     }

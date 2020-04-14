@@ -9,4 +9,6 @@ add_executable(cv
     compiler/AST.h
     compiler/Generator.cpp compiler/Generator.h
     visuals/VisualMain.cpp visuals/VisualMain.h
-    visuals/love2dShaders.h visuals/love2dHelper.h)
+    visuals/love2dShaders.h visuals/love2dHelper.h
+    visuals/HighlightableText.cpp visuals/HighlightableText.h
+    visuals/FloatingHighlight.cpp visuals/FloatingHighlight.h)
