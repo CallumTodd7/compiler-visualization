@@ -24,7 +24,6 @@
 
 #include "magpie/PNGHandler.h"
 #include "magpie/STBHandler.h"
-#include "magpie/EXRHandler.h"
 
 #include "magpie/ddsHandler.h"
 #include "magpie/PVRHandler.h"
@@ -48,7 +47,6 @@ Image::Image()
 	formatHandlers = {
 		new PNGHandler,
 		new STBHandler,
-		new EXRHandler,
 		new DDSHandler,
 		new PVRHandler,
 		new KTXHandler,

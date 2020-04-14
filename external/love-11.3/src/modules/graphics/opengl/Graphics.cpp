@@ -904,8 +904,6 @@ void Graphics::present(void *screenshotCallbackData)
 	if (isCanvasActive())
 		throw love::Exception("present cannot be called while a Canvas is active.");
 
-	deprecations.draw(this);
-
 	flushStreamDraws();
 	endPass();
 

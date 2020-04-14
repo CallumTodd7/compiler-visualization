@@ -43,91 +43,6 @@ namespace image
 namespace magpie
 {
 
-// Custom PNG decompression function for LodePNG, using zlib.
-static unsigned zlibDecompress(unsigned char **out, size_t *outsize, const unsigned char *in,
-                               size_t insize, const LodePNGDecompressSettings* /*settings*/)
-{
-	int status = Z_OK;
-
-	uLongf outdatasize = insize;
-	size_t sizemultiplier = 0;
-	unsigned char *outdata = out != nullptr ? *out : nullptr;
-
-	while (true)
-	{
-		// Enough size to hold the decompressed data, hopefully.
-		outdatasize = insize << (++sizemultiplier);
-
-		// LodePNG uses malloc, realloc, and free.
-		// Since version 2014-08-23, LodePNG passes in an existing pointer in
-		// the 'out' argument that it expects to be realloc'd. Not doing so can
-		// result in a memory leak.
-		if (outdata != nullptr)
-			outdata = (unsigned char *) realloc(outdata, outdatasize);
-		else
-			outdata = (unsigned char *) malloc(outdatasize);
-
-		if (!outdata)
-			return 83; // "Memory allocation failed" error code for LodePNG.
-
-		// Use zlib to decompress the PNG data.
-		status = uncompress(outdata, &outdatasize, in, insize);
-
-		// If the out buffer was big enough, break out of the loop.
-		if (status != Z_BUF_ERROR)
-			break;
-
-		// Otherwise delete the out buffer and try again with a larger size...
-		free(outdata);
-		outdata = nullptr;
-	}
-
-	if (status != Z_OK)
-	{
-		free(outdata);
-		return 10000; // "Unknown error code" for LodePNG.
-	}
-
-	if (out != nullptr)
-		*out = outdata;
-
-	if (outsize != nullptr)
-		*outsize = outdatasize;
-
-	return 0; // Success.
-}
-
-// Custom PNG compression function for LodePNG, using zlib.
-static unsigned zlibCompress(unsigned char **out, size_t *outsize, const unsigned char *in,
-                             size_t insize, const LodePNGCompressSettings* /*settings*/)
-{
-	// Get the maximum compressed size of the data.
-	uLongf outdatasize = compressBound(insize);
-
-	// LodePNG uses malloc, realloc, and free.
-	unsigned char *outdata = (unsigned char *) malloc(outdatasize);
-
-	if (!outdata)
-		return 83; // "Memory allocation failed" error code for LodePNG.
-
-	// Use zlib to compress the PNG data.
-	int status = compress(outdata, &outdatasize, in, insize);
-
-	if (status != Z_OK)
-	{
-		free(outdata);
-		return 10000; // "Unknown error code" for LodePNG.
-	}
-
-	if (out != nullptr)
-		*out = outdata;
-
-	if (outsize != nullptr)
-		*outsize = (size_t) outdatasize;
-
-	return 0; // Success.
-}
-
 bool PNGHandler::canDecode(Data *data)
 {
 	unsigned int width = 0, height = 0;
@@ -163,7 +78,6 @@ PNGHandler::DecodedImage PNGHandler::decode(Data *fdata)
 		throw love::Exception("Could not decode PNG image (%s)", err);
 	}
 
-	state.decoder.zlibsettings.custom_zlib = zlibDecompress;
 	state.info_raw.colortype = LCT_RGBA;
 
 	if (state.info_png.color.bitdepth == 16)
@@ -213,8 +127,6 @@ FormatHandler::EncodedImage PNGHandler::encode(const DecodedImage &img, EncodedF
 
 	state.info_png.color.colortype = LCT_RGBA;
 	state.info_png.color.bitdepth = state.info_raw.bitdepth;
-
-	state.encoder.zlibsettings.custom_zlib = zlibCompress;
 
 	const uint8 *data = img.data;
 	uint16 *swappeddata = nullptr;

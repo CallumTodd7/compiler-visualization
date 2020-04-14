@@ -9,6 +9,25 @@
 #include "Parser.h"
 #include "Generator.h"
 
+#include "../external/love-11.3/src/modules/graphics/opengl/Graphics.h"
+#include "../external/love-11.3/src/modules/font/freetype/Font.h"
+#include "../external/love-11.3/src/modules/graphics/Text.h"
+#include "../external/love-11.3/src/modules/window/sdl/Window.h"
+#include "../external/love-11.3/src/common/Optional.h"
+#include "../external/love-11.3/src/common/delay.h"
+
+#include "love2dShaders.h"
+
+using love::graphics::opengl::Shader;
+using love::graphics::ShaderStage;
+using love::graphics::opengl::Graphics;
+using love::graphics::Text;
+using love::window::sdl::Window;
+using love::Optional;
+using love::OptionalInt;
+using love::OptionalDouble;
+using love::Matrix4;
+
 struct CliOptions {
   char* sourceFilepath = nullptr;
   char* destFilepath = nullptr;
@@ -66,6 +85,29 @@ void compileWorker() {
   threadSync->threadExit();
 }
 
+Text* newText(Graphics* graphics, const std::string& text) {
+  std::vector<love::graphics::Font::ColoredString> strings;
+  strings.push_back(love::graphics::Font::ColoredString({text, graphics->getColor()}));
+  return graphics->newText(graphics->getFont(), strings);
+}
+
+Text* text1 = nullptr;
+
+void init(Graphics* graphics) {
+  text1 = newText(graphics, "Test");
+}
+
+void update() {
+
+}
+
+void draw(Graphics* graphics) {
+  graphics->rectangle(Graphics::DrawMode::DRAW_LINE, 10, 10, 100, 100);
+  Matrix4 mat = graphics->getTransform();
+  mat.translate(10, 10);
+  text1->draw(graphics, mat);
+}
+
 int main(int argc, char* argv[]) {
   // Get arguments
   for (int i = 1; i < argc; ++i) {
@@ -98,17 +140,65 @@ int main(int argc, char* argv[]) {
   std::thread compilationThread(compileWorker);
 
   if (cliOptions.hasUI) {
-    while (!threadSync->isThreadDone()) {
-      threadSync->mainReady([&]{
-        std::cout << "Copy data" << std::endl;
-      });
-      std::cout << "Animating!" << std::endl;
+    Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+    Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = defaultPixelShaderCode;
+    Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+    Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = videoPixelShaderCode;
+    Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+    Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = arrayPixelShaderCode;
 
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    auto* font = new love::font::freetype::Font();
+    love::Module::registerInstance(font);
 
-      std::cout << "Animated!" << std::endl;
+    auto* graphics = new Graphics();
+    love::Module::registerInstance(graphics);
+    graphics->setBackgroundColor(love::Colorf(0, 0, 0, 1));
+
+    auto* window = new Window();
+    love::Module::registerInstance(window);
+    window->setDisplaySleepEnabled(true);
+    window->setGraphics(graphics);
+
+    window->setWindow();
+    window->setWindowTitle("Compiler Visualisation");
+
+    graphics->setActive(true);
+
+    window->requestAttention(false);
+
+    init(graphics);
+
+    // Loop
+    SDL_Event evt;
+    while (true) {
+      SDL_WaitEvent(&evt);
+      if (evt.type == SDL_QUIT) {// || threadSync->isThreadDone()
+        break;
+      }
+
+      if (!threadSync->isThreadDone()) {
+        threadSync->mainReady([&] {
+          std::cout << "Copy data" << std::endl;
+        });
+        std::cout << "Animating!" << std::endl;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        std::cout << "Animated!" << std::endl;
+      }
+
+      if (graphics->isActive()) {
+        graphics->origin();
+        graphics->clear(Optional(graphics->getBackgroundColor()), OptionalInt(0), OptionalDouble(1.0));
+
+        draw(graphics);
+
+        graphics->present(nullptr);
+      }
     }
   }
+
+  SDL_Quit();
 
   compilationThread.join();
 

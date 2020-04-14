@@ -29,9 +29,7 @@
 #include "SpriteBatch.h"
 #include "ParticleSystem.h"
 #include "Font.h"
-#include "Video.h"
 #include "Text.h"
-#include "common/deprecation.h"
 
 // C++
 #include <algorithm>
@@ -197,11 +195,6 @@ Font *Graphics::newDefaultFont(int size, font::TrueTypeRasterizer::Hinting hinti
 
 	StrongRef<font::Rasterizer> r(fontmodule->newTrueTypeRasterizer(size, hinting), Acquire::NORETAIN);
 	return newFont(r.get(), filter);
-}
-
-Video *Graphics::newVideo(love::video::VideoStream *stream, float dpiscale)
-{
-	return new Video(this, stream, dpiscale);
 }
 
 love::graphics::SpriteBatch *Graphics::newSpriteBatch(Texture *texture, int size, vertex::Usage usage)
@@ -1599,7 +1592,7 @@ Graphics::Stats Graphics::getStats() const
 	stats.images = Image::imageCount;
 	stats.fonts = Font::fontCount;
 	stats.textureMemory = Texture::totalGraphicsMemory;
-	
+
 	return stats;
 }
 

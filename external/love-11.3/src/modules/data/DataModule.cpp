@@ -117,52 +117,6 @@ namespace love
 namespace data
 {
 
-CompressedData *compress(Compressor::Format format, const char *rawbytes, size_t rawsize, int level)
-{
-	Compressor *compressor = Compressor::getCompressor(format);
-
-	if (compressor == nullptr)
-		throw love::Exception("Invalid compression format.");
-
-	size_t compressedsize = 0;
-	char *cbytes = compressor->compress(format, rawbytes, rawsize, level, compressedsize);
-
-	CompressedData *data = nullptr;
-
-	try
-	{
-		data = new CompressedData(format, cbytes, compressedsize, rawsize, true);
-	}
-	catch (love::Exception &)
-	{
-		delete[] cbytes;
-		throw;
-	}
-
-	return data;
-}
-
-char *decompress(CompressedData *data, size_t &decompressedsize)
-{
-	size_t rawsize = data->getDecompressedSize();
-
-	char *rawbytes = decompress(data->getFormat(), (const char *) data->getData(),
-	                            data->getSize(), rawsize);
-
-	decompressedsize = rawsize;
-	return rawbytes;
-}
-
-char *decompress(Compressor::Format format, const char *cbytes, size_t compressedsize, size_t &rawsize)
-{
-	Compressor *compressor = Compressor::getCompressor(format);
-
-	if (compressor == nullptr)
-		throw love::Exception("Invalid compression format.");
-
-	return compressor->decompress(format, cbytes, compressedsize, rawsize);
-}
-
 char *encode(EncodeFormat format, const char *src, size_t srclen, size_t &dstlen, size_t linelen)
 {
 	switch (format)

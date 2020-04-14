@@ -31,8 +31,6 @@
 #include "common/StringMap.h"
 
 #include "Thread.h"
-#include "Channel.h"
-#include "LuaThread.h"
 #include "threads.h"
 
 namespace love
@@ -44,9 +42,6 @@ class ThreadModule : public love::Module
 public:
 
 	virtual ~ThreadModule() {}
-	virtual LuaThread *newThread(const std::string &name, love::Data *data);
-	virtual Channel *newChannel();
-	virtual Channel *getChannel(const std::string &name);
 
 	// Implements Module.
 	virtual const char *getName() const;
@@ -54,7 +49,6 @@ public:
 
 private:
 
-	std::map<std::string, StrongRef<Channel>> namedChannels;
 	MutexRef namedChannelMutex;
 
 }; // ThreadModule

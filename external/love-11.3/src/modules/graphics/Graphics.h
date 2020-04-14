@@ -39,12 +39,10 @@
 #include "Quad.h"
 #include "Mesh.h"
 #include "Image.h"
-#include "Deprecations.h"
 #include "depthstencil.h"
 #include "math/Transform.h"
 #include "font/Rasterizer.h"
 #include "font/Font.h"
-#include "video/VideoStream.h"
 #include "data/HashFunction.h"
 
 // C++
@@ -60,7 +58,6 @@ namespace graphics
 class SpriteBatch;
 class ParticleSystem;
 class Text;
-class Video;
 class Buffer;
 
 typedef Optional<Colorf> OptionalColorf;
@@ -477,7 +474,6 @@ public:
 	Quad *newQuad(Quad::Viewport v, double sw, double sh);
 	Font *newFont(love::font::Rasterizer *data, const Texture::Filter &filter = Texture::defaultFilter);
 	Font *newDefaultFont(int size, font::TrueTypeRasterizer::Hinting hinting, const Texture::Filter &filter = Texture::defaultFilter);
-	Video *newVideo(love::video::VideoStream *stream, float dpiscale);
 
 	SpriteBatch *newSpriteBatch(Texture *texture, int size, vertex::Usage usage);
 	ParticleSystem *newParticleSystem(Texture *texture, int size);
@@ -1060,8 +1056,6 @@ protected:
 	Buffer *quadIndexBuffer;
 
 	Capabilities capabilities;
-
-	Deprecations deprecations;
 
 	static const size_t MAX_USER_STACK_DEPTH = 128;
 	static const int MAX_TEMPORARY_CANVAS_UNUSED_FRAMES = 16;

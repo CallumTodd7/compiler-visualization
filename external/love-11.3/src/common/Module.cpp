@@ -21,7 +21,6 @@
 // LOVE
 #include "Module.h"
 #include "Exception.h"
-#include "deprecation.h"
 
 // std
 #include <map>
@@ -64,7 +63,6 @@ Module *Module::instances[] = {};
 
 Module::Module()
 {
-	initDeprecation();
 }
 
 Module::~Module()
@@ -89,8 +87,6 @@ Module::~Module()
 	}
 
 	freeEmptyRegistry();
-
-	deinitDeprecation();
 }
 
 void Module::registerInstance(Module *instance)

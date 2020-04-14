@@ -6,4 +6,5 @@ add_executable(cv
     Parser.cpp Parser.h
     Types.h Types.cpp
     AST.h
-    Generator.cpp Generator.h)
+    Generator.cpp Generator.h
+    love2dShaders.h)
