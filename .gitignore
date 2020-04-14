@@ -1,6 +1,5 @@
 [Bb]uild/
 [Bb]in/
-!external/**
 ubuntu_data/*
 !ubuntu_data/build.sh
 
@@ -557,3 +556,5 @@ healthchecksdb
 MigrationBackup/
 
 # End of https://www.gitignore.io/api/c++,linux,macos,clion,windows,visualstudio,visualstudiocode
+
+!external/**

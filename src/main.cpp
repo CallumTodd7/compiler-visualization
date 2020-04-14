@@ -34,6 +34,8 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
   std::vector<Token> tokenStream;
   try {
     tokenStream = lexer.getTokenStream();
+  } catch (ThreadTerminateException&) {
+    throw;
   } catch (std::exception& ex) {
     std::cout << "Lexer threw an exception: " << ex.what() << std::endl;
     return 1;
@@ -54,6 +56,8 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
   try {
     root = parser.parse();
     std::cout << *root << std::endl;
+  } catch (ThreadTerminateException&) {
+    throw;
   } catch (std::exception& ex) {
     std::cout << "Parser threw an exception: " << ex.what() << std::endl;
     return 1;
@@ -67,11 +71,12 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
   try {
     Generator generator(root, cliOptions.destFilepath);
     generator.generate();
+  } catch (ThreadTerminateException&) {
+    throw;
   } catch (std::exception& ex) {
     std::cout << "Generator threw an exception: " << ex.what() << std::endl;
     return 1;
   }
-
 
   ready({
       .type = Data::Type::MODE_CHANGE,

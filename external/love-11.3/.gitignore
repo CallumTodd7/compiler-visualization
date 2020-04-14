@@ -56,3 +56,4 @@ libtool
 stamp-h1
 /src/love
 /src/tags
+!/src/common/config.h
