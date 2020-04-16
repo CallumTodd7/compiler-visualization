@@ -26,6 +26,7 @@ struct Data {
 
   enum LexerState {
     UNINITIALISED = 0,
+    NEW_TOKEN,
     END_OF_FILE,
     UNKNOWN,
     START_NUMBER,
@@ -37,6 +38,7 @@ struct Data {
     END_ALPHA_IDENT,
     END_ALPHA_KEYWORD,
     END_OP,
+    WORD_UPDATE,
   };
 
   Type type = Type::NOOP;

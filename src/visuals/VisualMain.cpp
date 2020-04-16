@@ -67,10 +67,20 @@ void VisualMain::init() {
   window->requestAttention(false);
 
   txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
+  txtLexerCurrent = g->newText(g->getFont());
 
   sourceCode.init(g);
   sourceCode.position.x = 10;
   sourceCode.position.y = 40;
+
+  lexerChecklist.add(g, "End of file")
+      .add(g, "Digit")
+      .add(g, "String")
+      .add(g, "Alpha")
+      .add(g, "Keyword", 1)
+      .add(g, "Identifier", 1)
+      .add(g, "Operator")
+      .add(g, "Error: Unknown token");
 }
 
 void VisualMain::setupNewMode(const Data& data) {
@@ -96,6 +106,78 @@ void VisualMain::setupNewMode(const Data& data) {
 void VisualMain::handleLexerData(const Data& data) {
   sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                        data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+  //if (data.lexerState == Data::LexerState::END_OF_FILE)
+  //if (data.lexerState == Data::LexerState::UNKNOWN)
+
+  if (data.lexerState == Data::LexerState::WORD_UPDATE
+      || data.lexerState == Data::LexerState::END_NUMBER
+      || data.lexerState == Data::LexerState::END_STRING
+//      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
+      || data.lexerState == Data::LexerState::END_ALPHA_IDENT
+//      || data.lexerState == Data::LexerState::END_OP
+      ) {
+    txtLexerCurrent->set(buildColoredString(data.string, g));
+  } else {
+    txtLexerCurrent->clear();
+  }
+
+  if (data.lexerState == Data::LexerState::NEW_TOKEN) {
+    lexerChecklist.reset();
+    return;
+  }
+
+  if (data.lexerState == Data::LexerState::END_OF_FILE) {
+    lexerChecklist.accept(0);
+  } else if (data.lexerState == Data::LexerState::START_NUMBER) {
+    lexerChecklist.accept(1);
+  } else if (data.lexerState == Data::LexerState::START_STRING) {
+    lexerChecklist.accept(2);
+  } else if (data.lexerState == Data::LexerState::START_ALPHA) {
+    lexerChecklist.accept(3);
+  } else if (data.lexerState == Data::LexerState::START_OP) {
+    lexerChecklist.accept(6);
+  } else if (data.lexerState == Data::LexerState::UNKNOWN) {
+    lexerChecklist.accept(7);
+  }
+
+//  if (data.lexerState == Data::LexerState::END_OF_FILE
+//      || data.lexerState == Data::LexerState::START_NUMBER
+//      || data.lexerState == Data::LexerState::START_STRING
+//      || data.lexerState == Data::LexerState::START_ALPHA
+//      || data.lexerState == Data::LexerState::START_OP) {
+//    if (data.lexerState == Data::LexerState::END_OF_FILE) {
+//      lexerChecklist.accept();
+//    } else {
+//      lexerChecklist.next();
+//    }
+//
+//    if (data.lexerState == Data::LexerState::START_NUMBER) {
+//      lexerChecklist.accept();
+//    } else {
+//      lexerChecklist.next();
+//    }
+//
+//    if (data.lexerState == Data::LexerState::START_STRING) {
+//      lexerChecklist.accept();
+//    } else {
+//      lexerChecklist.next();
+//    }
+//
+//    if (data.lexerState == Data::LexerState::START_ALPHA) {
+//      lexerChecklist.accept();
+//    } else {
+//      lexerChecklist.next();
+//      lexerChecklist.next();
+//      lexerChecklist.next();
+//    }
+//
+//    if (data.lexerState == Data::LexerState::START_OP) {
+//      lexerChecklist.accept();
+//    } else {
+//      lexerChecklist.next();
+//      lexerChecklist.accept();
+//    }
+//  }
 }
 
 void VisualMain::handleParserData(const Data& data) {
@@ -128,7 +210,12 @@ void VisualMain::draw() {
   mat.translate(10, 10);
   txtTitle->draw(g, mat);
 
+  mat = g->getTransform();
+  mat.translate((float) g->getWidth() / 2.0f, 10);
+  txtLexerCurrent->draw(g, mat);
+
   if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
     sourceCode.draw(g);
+    lexerChecklist.draw(g, {(float) g->getWidth() / 2.0f, 40});
   }
 }

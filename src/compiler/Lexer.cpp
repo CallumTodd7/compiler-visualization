@@ -29,7 +29,8 @@ std::vector<Token> Lexer::getTokenStream() {
   while (true) {
     ready({
       .mode = Data::Mode::LEXER,
-      .type = Data::Type::NOOP,
+      .type = Data::Type::SPECIFIC,
+      .lexerState = Data::LexerState::NEW_TOKEN,
     });
     Token token = nextToken();
     if (token.type == Token::Type::TOKEN_EOF) break;
@@ -97,6 +98,15 @@ Token Lexer::nextToken() {
     do {
       word.push_back(currentChar);
       advanceCursor();
+
+      ready({
+                .mode = Data::Mode::LEXER,
+                .type = Data::Type::SPECIFIC,
+                .lexerState = Data::LexerState::WORD_UPDATE,
+                .lexerContextStart = lexerContext,
+                .lexerContextEnd = getContext().sub1Pos(),
+                .string = word,
+            });
     } while (currentChar != '"' && currentChar >= 0);
     advanceCursor();
 
@@ -125,6 +135,15 @@ Token Lexer::nextToken() {
     do {
       word.push_back(currentChar);
       advanceCursor();
+
+      ready({
+                .mode = Data::Mode::LEXER,
+                .type = Data::Type::SPECIFIC,
+                .lexerState = Data::LexerState::WORD_UPDATE,
+                .lexerContextStart = lexerContext,
+                .lexerContextEnd = getContext().sub1Pos(),
+                .string = word,
+            });
     } while (isalpha(currentChar) || isdigit(currentChar)); // Digits can be in alpha after the first char
 
     // Is keyword?
@@ -162,7 +181,17 @@ Token Lexer::nextToken() {
               .lexerContextEnd = lexerContext,
           });
 
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::WORD_UPDATE,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = getContext(),
+              .string = std::string(1, currentChar),//FIXME
+          });
+
     Token operatorToken = readOperator(lexerContext);
+
     if (operatorToken.type != Token::Type::TOKEN_ERROR) {
       ready({
                 .mode = Data::Mode::LEXER,
@@ -271,6 +300,15 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
     // Add char
     word.push_back(currentChar);
     advanceCursor();
+
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::WORD_UPDATE,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = getContext().sub1Pos(),
+              .string = word,
+          });
   }
 
   // Test for zero

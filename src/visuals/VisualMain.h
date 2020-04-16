@@ -16,6 +16,7 @@
 #include "../ThreadSync.h"
 
 #include "HighlightableText.h"
+#include "Checklist.h"
 
 using love::graphics::opengl::Shader;
 using love::graphics::ShaderStage;
@@ -41,6 +42,9 @@ private:
 
   Text* txtTitle = nullptr;
   HighlightableText sourceCode;
+
+  Text* txtLexerCurrent = nullptr;
+  Checklist lexerChecklist;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
