@@ -9,7 +9,7 @@
 #include <functional>
 #include <thread>
 #include <utility>
-#include <vector>
+#include <deque>
 #include "Data.h"
 
 #define THREAD_DEBUG_MSG 0
@@ -24,6 +24,7 @@ public:
 class ThreadSync {
 private:
   bool isActive;
+  bool queueData;
 
   std::mutex mtx;
   std::condition_variable cv;
@@ -35,6 +36,7 @@ private:
   bool shouldTerminate = false;
 
   Data data;
+  std::queue<Data> dataQueue;
 
   bool threadStarted = false;
   std::thread compilationThread;
@@ -42,15 +44,13 @@ private:
   std::function<int(const std::function<void(const Data&)>&)> worker;
 
 public:
-  explicit ThreadSync(bool isActive, std::function<int(const std::function<void(Data)>&)>  worker)
-    : isActive(isActive), worker(std::move(worker)) {
+  explicit ThreadSync(bool isActive,
+                      bool queueData,
+                      std::function<int(const std::function<void(Data)>&)> worker)
+    : isActive(isActive), queueData(queueData), worker(std::move(worker)) {
   }
 
-  void workerReady();
-  void mainReady(const std::function<void(const Data&)>& callback);
-
-  void threadExit();
-  bool isThreadDone();
+  void getData(const std::function<void(const Data&)>& callback);
 
   void terminateThread();
 
@@ -59,6 +59,13 @@ public:
   int getWorkerExitCode();
 
 private:
+  // Only used when not queued
+  void workerReady();
+  // Only used when not queued
+  void mainReady(const std::function<void(const Data&)>& callback);
+
+  void threadExit();
+  bool isThreadDone();
 
 };
 

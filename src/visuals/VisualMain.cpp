@@ -35,7 +35,7 @@ VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
 }
 
 void VisualMain::requestNextData() {
-  threadSync->mainReady([&](const Data& data) {
+  threadSync->getData([&](const Data& data) {
 //    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
     switch (data.type) {
       case Data::Type::NOOP: break;

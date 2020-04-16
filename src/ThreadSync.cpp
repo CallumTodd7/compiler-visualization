@@ -11,10 +11,6 @@ void ThreadSync::workerReady() {
   // If not running in UI mode, silently skip method
   if (!this->isActive) return;
 
-  if (this->shouldTerminate) {
-    throw ThreadTerminateException();
-  }
-
   // set ready flag
   // - allowing main thread to copy data
   isWorkerReady = true;
@@ -83,6 +79,21 @@ void ThreadSync::mainReady(const std::function<void(const Data&)>& callback) {
 #endif
 }
 
+void ThreadSync::getData(const std::function<void(const Data&)>& callback){
+  assert(this->isActive);
+
+  if (queueData) {
+    if (dataQueue.empty()) {
+      callback({ .type = Data::Type::NOOP });
+    } else {
+      callback(dataQueue.front());
+      dataQueue.pop();
+    }
+  } else {
+    mainReady(callback);
+  }
+}
+
 void ThreadSync::threadExit() {
   isWorkerDone = true;
   cv.notify_all();
@@ -103,12 +114,20 @@ void ThreadSync::runWorker() {
     workerExitCode = 0;
     try {
       if (isActive) {
-        workerExitCode = worker([&](Data newData) {
-          data = newData;
-          this->workerReady();
+        workerExitCode = worker([&](const Data& newData) {
+          if (this->shouldTerminate) {
+            throw ThreadTerminateException();
+          }
+
+          if (queueData) {
+            dataQueue.push(newData);
+          } else {
+            data = newData;
+            this->workerReady();
+          }
         });
       } else {
-        workerExitCode = worker([](Data newData) {});
+        workerExitCode = worker([](const Data& newData) {});
       }
     } catch (ThreadTerminateException&) {
       // Thread has been told to terminate; exit

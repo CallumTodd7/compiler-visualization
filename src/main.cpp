@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  ThreadSync threadSync(cliOptions.hasUI, compileWorker);
+  ThreadSync threadSync(cliOptions.hasUI, true, compileWorker);
 
   if (cliOptions.hasUI) {
     bool hasCompilerStarted = false;
