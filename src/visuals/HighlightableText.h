@@ -9,6 +9,7 @@
 #include <modules/graphics/opengl/Graphics.h>
 #include <modules/graphics/Text.h>
 #include <modules/graphics/Font.h>
+#include "Tween.h"
 
 using love::graphics::opengl::Graphics;
 
@@ -27,7 +28,8 @@ private:
   love::Vector4 highlightPositions;
   love::Colorf highlightColour = love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.0f, 1);
   bool showPeekHighlight = false;
-  love::Vector4 peekHighlightPositions;
+//  love::Vector4 peekHighlightPositions;
+  Tween<love::Vector4> peekHighlightPositions;
   love::Colorf peekHighlightColour = love::Colorf(187 / 255.0f, 38 / 255.0f, 186 / 255.0f, 1);
 
 public:
@@ -40,6 +42,9 @@ public:
   void highlight(int startLine, int startPos, int endLine, int endPos);
   void highlightPeek(int startLine, int startPos, int endLine, int endPos);
 
+  bool hasActiveTweens() {
+    return peekHighlightPositions.isActive();
+  }
 
 };
 

@@ -216,18 +216,24 @@ void VisualMain::handleCodeGenData(const Data& data) {
 }
 
 int pastTime = -1;
+bool activeTweens = false;
 void VisualMain::update(double dt) {
 //  if ((int) Timer::getTime() != pastTime) {
 //    requestNextData();
 //    pastTime = (int) Timer::getTime();
 //    return;
 //  }
-  if (pastTime > 300) {
+
+  if (pastTime > 300 && !activeTweens) {
 //    std::cout << "Req data" << std::endl;
     requestNextData();
     pastTime = -1;
   }
   pastTime++;
+
+  sourceCode.update(dt, 0);
+
+  activeTweens = sourceCode.hasActiveTweens();
 }
 
 void VisualMain::draw() {

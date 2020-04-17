@@ -22,7 +22,7 @@ void HighlightableText::load(const std::string& filepath) {
 }
 
 void HighlightableText::update(double dt, double mod) {
-
+  bool isComplete = peekHighlightPositions.update(dt);
 }
 
 void HighlightableText::draw(Graphics* g) {
@@ -34,9 +34,10 @@ void HighlightableText::draw(Graphics* g) {
       g->push(Graphics::StackType::STACK_ALL);
       if (showPeekHighlight) {
         g->setColor(peekHighlightColour);
+        auto coords = peekHighlightPositions.get();
         g->rectangle(Graphics::DrawMode::DRAW_FILL,
-                     position.x + peekHighlightPositions.x, position.y + peekHighlightPositions.y,
-                     peekHighlightPositions.z, peekHighlightPositions.w);
+                     position.x + coords.x, position.y + coords.y,
+                     coords.z, coords.w);
       }
       if (showHighlight) {
         g->setColor(highlightColour);
@@ -57,9 +58,20 @@ void HighlightableText::highlightPeek(int startLine, int startPos, int endLine, 
     float x1 = (float) font->getWidth(str.substr(0, startPos - 1));
     float x2 = (float) font->getWidth(str.substr(startPos - 1, endPos - startPos + 1));
 
-    peekHighlightPositions = {
-        x1, font->getHeight() * (float) (startLine - 1), x2, font->getHeight()
-    };
+    peekHighlightPositions.tween({
+                                     x1,
+                                     font->getHeight() * (float) (startLine - 1),
+                                     0,
+                                     font->getHeight()
+                                 },
+                                 {
+                                     x1,
+                                     font->getHeight() * (float) (startLine - 1),
+                                     x2,
+                                     font->getHeight()
+                                 },
+                                 0.25,
+                                 true);
     showPeekHighlight = true;
     showHighlight = false;
   } catch (std::out_of_range&) {}
