@@ -27,11 +27,6 @@ std::vector<Token> Lexer::getTokenStream() {
   std::vector<Token> tokens;
 
   while (true) {
-    ready({
-      .mode = Data::Mode::LEXER,
-      .type = Data::Type::SPECIFIC,
-      .lexerState = Data::LexerState::NEW_TOKEN,
-    });
     Token token = nextToken();
     if (token.type == Token::Type::TOKEN_EOF) break;
     if (token.type == Token::Type::TOKEN_ERROR) throw std::exception();
@@ -59,6 +54,15 @@ Token Lexer::nextToken() {
 
   // Get new context after skipping whitespace
   lexerContext = getContext();
+
+  ready({
+            .mode = Data::Mode::LEXER,
+            .type = Data::Type::SPECIFIC,
+            .lexerState = Data::LexerState::NEW_TOKEN,
+            .lexerContextStart = lexerContext,
+            .lexerContextEnd = lexerContext,
+            .peekedChar = currentChar,
+        });
 
   // Check for EOF
   if (currentChar < 0 && file->fileStream->eof()) {
@@ -291,6 +295,15 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
   while (currentChar == '0') {
     leadingZeros++;
     advanceCursor();
+
+    ready({
+              .mode = Data::Mode::LEXER,
+              .type = Data::Type::SPECIFIC,
+              .lexerState = Data::LexerState::WORD_UPDATE,
+              .lexerContextStart = lexerContext,
+              .lexerContextEnd = getContext().sub1Pos(),
+              .string = std::string(leadingZeros, '0'),
+          });
   }
 
   // Get string from chars
@@ -307,7 +320,7 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
               .lexerState = Data::LexerState::WORD_UPDATE,
               .lexerContextStart = lexerContext,
               .lexerContextEnd = getContext().sub1Pos(),
-              .string = word,
+              .string = std::string(leadingZeros, '0') + word,
           });
   }
 

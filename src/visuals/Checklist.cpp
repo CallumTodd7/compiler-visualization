@@ -4,29 +4,51 @@
 
 #include "Checklist.h"
 
-Checklist& Checklist::add(Graphics* g, const std::string& str, unsigned char indent) {
+int Checklist::add(Graphics* g, const std::string& text, int parentId) {
   std::vector<love::graphics::Font::ColoredString> strings;
-  strings.push_back({str, g->getColor()});
-  love::graphics::Text* text = g->newText(g->getFont(), strings);
+  strings.push_back({text, g->getColor()});
+  love::graphics::Text* textObj = g->newText(g->getFont(), strings);
+
+  unsigned char indent = 0;
+  if (parentId >= 0 && parentId < items.size()) {
+    items[parentId].hasChildren = true;
+    indent = items[parentId].indent + 1;
+    if (indent > maxIndent) {
+      maxIndent = indent;
+    }
+  }
+
+  Vector2 size = {
+      (float) g->getFont()->getWidth(text),
+      g->getFont()->getHeight(),
+  };
+
+  if (size.x > maxSize.x) {
+    maxSize.x = size.x;
+  }
+  if (size.y > maxSize.y) {
+    maxSize.y = size.y;
+  }
 
   ChecklistItem item {
-      .text = text,
+      .text = textObj,
+      .size = size,
+      .parent = parentId,
       .indent = indent,
-      .size = {
-          (float) g->getFont()->getWidth(str),
-          g->getFont()->getHeight(),
-      },
       .state = ChecklistItemState::NORMAL
   };
 
+  int id = items.size();
   items.push_back(item);
-  return *this;
+  return id;
 }
 
 void Checklist::draw(Graphics* g, const Vector2& position) {
   float indentSize = 10;
   float paddingSize = 10;
   float cursorWidth = 30;
+
+  float maxTextWidth = maxSize.x + ((float)maxIndent * indentSize);
 
   love::Matrix4 mat = g->getTransform();
   mat.translate(position.x, position.y);
@@ -43,22 +65,58 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
       yPos += item.size.y + padding;
     }
 
-    love::Matrix4 textMat = mat;
-    textMat.translate(cursorWidth + paddingSize + indentValue, 0);
-
-    if (i == cursor) {
-      float height = cursorWidth / 4;
-      float offset = (item.size.y - height) / 2;
-      g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x, yPos + offset, cursorWidth, height);
+    float alignmentOffset = 0;
+    if (alignment == Alignment::RIGHT) {
+      alignmentOffset = maxTextWidth - item.size.x;
+      // Invert indent
+      indentValue = -indentValue;
+    } else if (alignment == Alignment::CENTER) {
+      alignmentOffset = (maxTextWidth - item.size.x) / 2;
+      // No point indenting with center alignment
+      indentValue = 0;
     }
 
+    float textXOffset = alignmentOffset + indentValue;
+
+    if (i == cursor) {
+      float cursorXOffset = 0;
+      if (alignment == Alignment::RIGHT) {
+        cursorXOffset = alignmentOffset + item.size.x + paddingSize;
+      }
+      drawnCursorPosition = {position.x + cursorXOffset, yPos + (item.size.y / 2)};
+
+      if (enableCursor) {
+        float height = cursorWidth / 4;
+        g->rectangle(Graphics::DrawMode::DRAW_FILL,
+                     drawnCursorPosition.x, drawnCursorPosition.y - (height / 2),
+                     cursorWidth, height);
+      }
+    }
+    if (enableCursor && alignment != Alignment::RIGHT) {
+      textXOffset += cursorWidth + paddingSize;
+    }
+
+    love::Matrix4 textMat = mat;
+    textMat.translate(textXOffset, 0);
+
     auto origCol = g->getColor();
-    if (item.state == ChecklistItemState::ACCEPTED) {
-      g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
-      g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + cursorWidth + paddingSize + indentValue, yPos, item.size.x, item.size.y);
-      g->setColor(origCol);
-    } else if (item.state == ChecklistItemState::REJECTED) {
-      g->setColor(love::Colorf(1, 0, 0, 1));
+
+    switch (item.state) {
+      case NORMAL: break;
+      case REJECTED:
+        g->setColor(love::Colorf(1, 0, 0, 1));
+        break;
+      case PROGRESS:
+        g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
+        g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + textXOffset, yPos, item.size.x, item.size.y);
+        g->setColor(origCol);
+        break;
+      case ACCEPTED:
+        g->setColor(love::Colorf(0, 1, 0, 1));
+        break;
+      case IGNORED:
+        g->setColor(love::Colorf(0.5, 0.5, 0.5, 1));
+        break;
     }
     item.text->draw(g, textMat);
 
@@ -72,13 +130,42 @@ void Checklist::next() {
   }
 }
 
-void Checklist::accept(unsigned int index) {
-  items[index].state = ChecklistItemState::ACCEPTED;
-  cursor = index; // TODO Remove me when cursor is being used properly
-
-  // Reject rest
-  for (size_t i = index + 1; i < items.size(); ++i) {
+void Checklist::accept(unsigned int index, bool isFinal) {
+  // Mark prior as rejected
+  for (size_t i = 0; i < index; ++i) {
     items[i].state = ChecklistItemState::REJECTED;
+  }
+
+  // Mark as accepted
+
+  if (isFinal) {
+    items[index].state = ChecklistItemState::ACCEPTED;
+  } else {
+    items[index].state = ChecklistItemState::PROGRESS;
+  }
+  cursor = index;
+
+  // Mark rest as ignored
+
+  // While not marking my children...
+  int indentOfChildrenToSkip = -1; // -1 for no children
+  if (items[index].hasChildren) {
+    indentOfChildrenToSkip = items[index].indent + 1;
+  }
+  // ...mark the rest as ignored.
+  for (size_t i = index + 1; i < items.size(); ++i) {
+    // Now out of children; reset
+    if (indentOfChildrenToSkip > items[i].indent) {
+      indentOfChildrenToSkip = -1;
+    }
+
+    // If child to skip, skip
+    if (indentOfChildrenToSkip >= 0) {
+      continue;
+    }
+
+    // Mark as ignored
+    items[i].state = ChecklistItemState::IGNORED;
   }
 }
 
@@ -87,4 +174,8 @@ void Checklist::reset() {
     item.state = ChecklistItemState::NORMAL;
   }
   cursor = 0;
+}
+
+Vector2 Checklist::getDrawnCursorPosition() {
+  return drawnCursorPosition;
 }

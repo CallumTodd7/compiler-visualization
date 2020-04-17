@@ -30,6 +30,7 @@ VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
 
   love::window::WindowSettings windowSettings;
   windowSettings.resizable = true;
+  windowSettings.vsync = false; // TODO remove or keep?
   window->setWindow(1280, 720, &windowSettings);
   window->setWindowTitle("Compiler Visualisation");
 }
@@ -68,19 +69,24 @@ void VisualMain::init() {
 
   txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
   txtLexerCurrent = g->newText(g->getFont());
+  txtLexerPeek = g->newText(g->getFont());
+  txtLexerTextCursor = g->newText(g->getFont());
 
   sourceCode.init(g);
   sourceCode.position.x = 10;
   sourceCode.position.y = 40;
 
-  lexerChecklist.add(g, "End of file")
-      .add(g, "Digit")
-      .add(g, "String")
-      .add(g, "Alpha")
-      .add(g, "Keyword", 1)
-      .add(g, "Identifier", 1)
-      .add(g, "Operator")
-      .add(g, "Error: Unknown token");
+  lexerChecklist.alignment = Alignment::RIGHT;
+  lexerChecklist.enableCursor = false;
+
+  lexerChecklist.add(g, "End of file");
+  lexerChecklist.add(g, "Digit");
+  lexerChecklist.add(g, "String");
+  auto alphaId = lexerChecklist.add(g, "Alpha");
+  lexerChecklist.add(g, "Keyword", alphaId);
+  lexerChecklist.add(g, "Identifier", alphaId);
+  lexerChecklist.add(g, "Operator");
+  lexerChecklist.add(g, "Error: Unknown token");
 }
 
 void VisualMain::setupNewMode(const Data& data) {
@@ -104,17 +110,27 @@ void VisualMain::setupNewMode(const Data& data) {
 }
 
 void VisualMain::handleLexerData(const Data& data) {
-  sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
-                       data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+  if (data.lexerState == Data::LexerState::NEW_TOKEN) {
+    sourceCode.highlightPeek(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
+                             data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+  } else {
+    sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
+                         data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+  }
   //if (data.lexerState == Data::LexerState::END_OF_FILE)
   //if (data.lexerState == Data::LexerState::UNKNOWN)
 
+  if (data.peekedChar > 0) {
+    txtLexerPeek->set(buildColoredString(std::string(1, data.peekedChar), g));
+  }
+
   if (data.lexerState == Data::LexerState::WORD_UPDATE
+  // TODO The below END_* should be removed; this will make way for the floating token
       || data.lexerState == Data::LexerState::END_NUMBER
       || data.lexerState == Data::LexerState::END_STRING
-//      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
+      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
       || data.lexerState == Data::LexerState::END_ALPHA_IDENT
-//      || data.lexerState == Data::LexerState::END_OP
+      || data.lexerState == Data::LexerState::END_OP
       ) {
     txtLexerCurrent->set(buildColoredString(data.string, g));
   } else {
@@ -123,21 +139,32 @@ void VisualMain::handleLexerData(const Data& data) {
 
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
     lexerChecklist.reset();
+    txtLexerCurrent->clear();
     return;
   }
 
   if (data.lexerState == Data::LexerState::END_OF_FILE) {
-    lexerChecklist.accept(0);
+    lexerChecklist.accept(0, true);
   } else if (data.lexerState == Data::LexerState::START_NUMBER) {
-    lexerChecklist.accept(1);
+    lexerChecklist.accept(1, false);
+  } else if (data.lexerState == Data::LexerState::END_NUMBER) {
+    lexerChecklist.accept(1, true);
   } else if (data.lexerState == Data::LexerState::START_STRING) {
-    lexerChecklist.accept(2);
+    lexerChecklist.accept(2, false);
+  } else if (data.lexerState == Data::LexerState::END_STRING) {
+    lexerChecklist.accept(2, true);
   } else if (data.lexerState == Data::LexerState::START_ALPHA) {
-    lexerChecklist.accept(3);
+    lexerChecklist.accept(3, false);
+  } else if (data.lexerState == Data::LexerState::END_ALPHA_KEYWORD) {
+    lexerChecklist.accept(4, true);
+  } else if (data.lexerState == Data::LexerState::END_ALPHA_IDENT) {
+    lexerChecklist.accept(5, true);
   } else if (data.lexerState == Data::LexerState::START_OP) {
-    lexerChecklist.accept(6);
+    lexerChecklist.accept(6, false);
+  } else if (data.lexerState == Data::LexerState::END_OP) {
+    lexerChecklist.accept(6, true);
   } else if (data.lexerState == Data::LexerState::UNKNOWN) {
-    lexerChecklist.accept(7);
+    lexerChecklist.accept(7, true);
   }
 
 //  if (data.lexerState == Data::LexerState::END_OF_FILE
@@ -195,7 +222,7 @@ void VisualMain::update(double dt) {
 //    pastTime = (int) Timer::getTime();
 //    return;
 //  }
-  if (pastTime > 13) {
+  if (pastTime > 300) {
 //    std::cout << "Req data" << std::endl;
     requestNextData();
     pastTime = -1;
@@ -210,12 +237,35 @@ void VisualMain::draw() {
   mat.translate(10, 10);
   txtTitle->draw(g, mat);
 
-  mat = g->getTransform();
-  mat.translate((float) g->getWidth() / 2.0f, 10);
-  txtLexerCurrent->draw(g, mat);
-
   if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
+    // Left: source code
     sourceCode.draw(g);
-    lexerChecklist.draw(g, {(float) g->getWidth() / 2.0f, 40});
+
+    // Middle: checklist
+    float padding = 5;
+    mat = g->getTransform();
+    float y = 10;
+    mat.translate((float) g->getWidth() / 2.0f + padding, y + padding);
+    txtLexerPeek->draw(g, mat);
+
+    mat.translate(50, 0);
+    txtLexerCurrent->draw(g, mat);
+    Vector2 rectSize = {300, g->getFont()->getHeight() + (padding * 2.0f)};
+    g->push(Graphics::StackType::STACK_ALL);
+    g->setColor(Colorf(1, 1, 0, 1));
+    g->rectangle(Graphics::DrawMode::DRAW_LINE, (float) g->getWidth() / 2.0f, y, rectSize.x, rectSize.y);
+    g->pop();
+    y += rectSize.y;
+    y += padding * 2.0f;
+
+    lexerChecklist.draw(g, {(float) g->getWidth() / 2.0f, y});
+    Vector2 cursorPos = lexerChecklist.getDrawnCursorPosition();
+
+    Matrix4 cursorMat = g->getTransform();
+    cursorMat.translate(cursorPos.x, cursorPos.y - ((float)g->getFont()->getHeight() / 2));
+    txtLexerTextCursor->draw(g, cursorMat);
+//    g->rectangle(Graphics::DrawMode::DRAW_FILL, cursorPos.x, cursorPos.y - 5, 10, 10);
+
+    // Right: token stream
   }
 }

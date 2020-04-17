@@ -1,5 +1,9 @@
 // Gen test
 
+u8 a() {
+  u8 n = 00000111+000002222+0000+3+4+5+6+7+8+9;
+}
+
 extern void printf(u8 fmt, u8 a)
 extern void puts(u8 str)
 

@@ -50,6 +50,7 @@ struct Data {
 
   std::string string;
   unsigned long long number;
+  char peekedChar = 0;
 
 };
 

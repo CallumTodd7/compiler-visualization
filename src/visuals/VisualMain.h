@@ -43,7 +43,9 @@ private:
   Text* txtTitle = nullptr;
   HighlightableText sourceCode;
 
+  Text* txtLexerPeek = nullptr;
   Text* txtLexerCurrent = nullptr;
+  Text* txtLexerTextCursor = nullptr;
   Checklist lexerChecklist;
 
 public:

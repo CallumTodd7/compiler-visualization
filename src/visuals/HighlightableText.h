@@ -23,8 +23,12 @@ private:
   love::graphics::Font* font = nullptr;
   love::Colorf colour;
 
+  bool showHighlight = false;
   love::Vector4 highlightPositions;
   love::Colorf highlightColour = love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.0f, 1);
+  bool showPeekHighlight = false;
+  love::Vector4 peekHighlightPositions;
+  love::Colorf peekHighlightColour = love::Colorf(187 / 255.0f, 38 / 255.0f, 186 / 255.0f, 1);
 
 public:
   void load(const std::string& filepath);
@@ -34,6 +38,7 @@ public:
   void draw(Graphics* g);
 
   void highlight(int startLine, int startPos, int endLine, int endPos);
+  void highlightPeek(int startLine, int startPos, int endLine, int endPos);
 
 
 };
