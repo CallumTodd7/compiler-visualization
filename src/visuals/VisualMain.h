@@ -38,19 +38,19 @@ private:
   Window* window;
   love::font::freetype::Font* font;
 
+  love::graphics::Font* fontSourceCodeProRegular20 = nullptr;
+
   Data::Mode state = Data::Mode::LEXER;
 
   Text* txtTitle = nullptr;
   HighlightableText sourceCode;
 
-//  Text* txtLexerCurrent = nullptr;
-
   Checklist lexerChecklist;
   bool lexerCurrentIsPeek = false;
   bool shouldScissorLexerCurrent = true;
   bool shouldShowAllChecklistHighlighting = true;
-  Tween<Vector2> txtLexerPeekPos;
-  Text* txtLexerPeek = nullptr;
+  Tween<Vector2> txtLexerCurrentPos;
+  Text* txtLexerCurrent = nullptr;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);

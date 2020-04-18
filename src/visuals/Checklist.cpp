@@ -45,8 +45,6 @@ int Checklist::add(Graphics* g, const std::string& text, int parentId) {
 }
 
 void Checklist::updatePositions() {
-  float indentSize = 10;
-
   float maxTextWidth = maxSize.x + ((float)maxIndent * indentSize);
 
   float yPos = 0;

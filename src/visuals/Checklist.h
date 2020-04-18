@@ -46,6 +46,7 @@ public:
   float cursorWidth = 30;
   float cursorPadding = 30;
   float padding = 10;
+  float indentSize = 10;
   float highlightUntilYPos = -1;
 
 private:

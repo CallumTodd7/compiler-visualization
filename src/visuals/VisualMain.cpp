@@ -7,14 +7,31 @@
 #include "love2dShaders.h"
 #include "love2dHelper.h"
 
+// Font
+#include "SourceCodePro-regular.ttf.h"
+
+class SourceCodeProFontData : public love::Data {
+public:
+  Data* clone() const override { return new SourceCodeProFontData(); }
+
+  void* getData() const override { return SourceCodePro_Regular_ttf; }
+
+  size_t getSize() const override { return SourceCodePro_Regular_ttf_len; }
+};
+
+using love::font::TrueTypeRasterizer;
+
 VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
     : threadSync(threadSync), timer(timer) {
-  Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
-  Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = defaultPixelShaderCode;
-  Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
-  Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = videoPixelShaderCode;
-  Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
-  Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][Shader::LANGUAGE_GLSL3][0].source[ShaderStage::STAGE_PIXEL] = arrayPixelShaderCode;
+  auto shaderStandard = &Graphics::defaultShaderCode[Shader::STANDARD_DEFAULT][Shader::LANGUAGE_GLSL3][0];
+  shaderStandard->source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+  shaderStandard->source[ShaderStage::STAGE_PIXEL] = defaultPixelShaderCode;
+  auto shaderVideo = &Graphics::defaultShaderCode[Shader::STANDARD_VIDEO][Shader::LANGUAGE_GLSL3][0];
+  shaderVideo->source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+  shaderVideo->source[ShaderStage::STAGE_PIXEL] = videoPixelShaderCode;
+  auto shaderArray = &Graphics::defaultShaderCode[Shader::STANDARD_ARRAY][Shader::LANGUAGE_GLSL3][0];
+  shaderArray->source[ShaderStage::STAGE_VERTEX] = defaultVertexShaderCode;
+  shaderArray->source[ShaderStage::STAGE_PIXEL] = arrayPixelShaderCode;
 
   font = new love::font::freetype::Font();
   love::Module::registerInstance(font);
@@ -64,22 +81,40 @@ void VisualMain::requestNextData() {
   });
 }
 
+template<typename FontData>
+love::graphics::Font* genFont(int size, TrueTypeRasterizer::Hinting hinting) {
+  auto g = love::Module::getInstance<Graphics>(love::Module::ModuleType::M_GRAPHICS);
+  auto font = love::Module::getInstance<love::font::Font>(love::Module::ModuleType::M_FONT);
+
+  auto data = new FontData();
+  auto rasterizer = font->newTrueTypeRasterizer(data, size, hinting);
+  auto newFont = g->newFont(rasterizer, g->getDefaultFilter());
+  rasterizer->release();
+  data->release();
+
+  return newFont;
+}
+
 void VisualMain::init() {
   g->setActive(true);
   window->requestAttention(false);
 
+  fontSourceCodeProRegular20 = genFont<SourceCodeProFontData>(20, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
+  g->setFont(fontSourceCodeProRegular20);
+
   txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
-//  txtLexerCurrent = g->newText(g->getFont());
-  txtLexerPeek = g->newText(g->getFont());
+  txtLexerCurrent = g->newText(g->getFont());
 
   sourceCode.init(g);
   sourceCode.position.x = 10;
-  sourceCode.position.y = 40;
+  sourceCode.position.y = 60;
 
   lexerChecklist.alignment = Alignment::RIGHT;
   lexerChecklist.enableCursor = false;
   lexerChecklist.cursorPadding = 20;
-  lexerChecklist.cursorWidth = (float) g->getFont()->getWidth('0');
+  auto charWidth = (float) g->getFont()->getWidth('0');
+  lexerChecklist.cursorWidth = charWidth;
+  lexerChecklist.indentSize = charWidth * 2;
 
   lexerChecklist.add(g, "End of file");
   lexerChecklist.add(g, "Digit");
@@ -113,7 +148,10 @@ void VisualMain::setupNewMode(const Data& data) {
 
 void VisualMain::handleLexerData(const Data& data) {
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
-    txtLexerPeekPos.set({lexerChecklist.getCursorPosition().x, -(g->getFont()->getHeight() + lexerChecklist.padding)});
+    txtLexerCurrentPos.set({
+                               lexerChecklist.getCursorPosition().x,
+                               -(g->getFont()->getHeight() + lexerChecklist.padding)
+                           });
     sourceCode.highlightPeek(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                              data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
     lexerCurrentIsPeek = true;
@@ -124,35 +162,25 @@ void VisualMain::handleLexerData(const Data& data) {
   }
 
   if (data.peekedChar > 0) {
-    txtLexerPeek->set(buildColoredString(std::string(1, data.peekedChar), g));
+    txtLexerCurrent->set(buildColoredString(std::string(1, data.peekedChar), g));
   }
 
   if (data.lexerState == Data::LexerState::WORD_UPDATE
-    // TODO The below END_* should be removed; this will make way for the floating token
-//      || data.lexerState == Data::LexerState::END_NUMBER
-//      || data.lexerState == Data::LexerState::END_STRING
-//      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
-//      || data.lexerState == Data::LexerState::END_ALPHA_IDENT
-//      || data.lexerState == Data::LexerState::END_OP
       ) {
-//    txtLexerCurrent->set(buildColoredString(data.string, g));
-    txtLexerPeek->set(buildColoredString(data.string, g));
+    txtLexerCurrent->set(buildColoredString(data.string, g));
     if (data.string.size() > 1) {
       shouldScissorLexerCurrent = true;
     }
-  } else {
-//    txtLexerCurrent->clear();
   }
 
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
     lexerChecklist.reset();
-//    txtLexerCurrent->clear();
     return;
   }
 
   auto moveToPos = [&](int travelIndexDistance, double wait = 0.0) {
     shouldShowAllChecklistHighlighting = false;
-    txtLexerPeekPos
+    txtLexerCurrentPos
         .startAtCurrent({})
         .goTo(lexerChecklist.getCursorPosition(), 0.5 * travelIndexDistance)
         .callback([&] {
@@ -213,17 +241,17 @@ void VisualMain::update(double dt) {
   }
 
   sourceCode.update(dt, 0);
-  txtLexerPeekPos.update(dt);
+  txtLexerCurrentPos.update(dt);
 
   if (!shouldShowAllChecklistHighlighting) {
-    auto yPos = txtLexerPeekPos.get().y;
+    auto yPos = txtLexerCurrentPos.get().y;
     lexerChecklist.highlightUntilYPos = fmax(0, yPos);
   } else {
     lexerChecklist.highlightUntilYPos = -1;
   }
 
   activeAnimations = sourceCode.hasActiveAnimations()
-      || txtLexerPeekPos.isActive();
+      || txtLexerCurrentPos.isActive();
 }
 
 void VisualMain::draw() {
@@ -238,25 +266,11 @@ void VisualMain::draw() {
     sourceCode.draw(g);
 
     // Middle: checklist
-    float padding = 5;
-    mat = g->getTransform();
-    float y = 40;
-    mat.translate((float) g->getWidth() / 2.0f + padding, y + padding);
-//    txtLexerPeek->draw(g, mat);
-
-//    mat.translate(50, 0);
-//    txtLexerCurrent->draw(g, mat);
-//    Vector2 rectSize = {300, g->getFont()->getHeight() + (padding * 2.0f)};
-//    g->push(Graphics::StackType::STACK_ALL);
-//    g->setColor(Colorf(1, 1, 0, 1));
-//    g->rectangle(Graphics::DrawMode::DRAW_LINE, (float) g->getWidth() / 2.0f, y, rectSize.x, rectSize.y);
-//    g->pop();
-//    y += rectSize.y;
-//    y += padding * 2.0f;
+    float y = 40 + (g->getFont()->getHeight() + lexerChecklist.padding);
 
     lexerChecklist.draw(g, {(float) g->getWidth() / 2.0f, y});
 
-    Vector2 cursorPos = txtLexerPeekPos.get();
+    Vector2 cursorPos = txtLexerCurrentPos.get();
     Vector4 highlightRect;
     if (lexerCurrentIsPeek) {
       highlightRect = sourceCode.getPeekHighlightRect();
@@ -264,7 +278,7 @@ void VisualMain::draw() {
       highlightRect = sourceCode.getHighlightRect();
     }
     highlightRect.x = ((float) g->getWidth() / 2.0f) + cursorPos.x;
-    highlightRect.y = y + cursorPos.y - ((float) txtLexerPeek->getHeight() / 2);
+    highlightRect.y = y + cursorPos.y - ((float) txtLexerCurrent->getHeight() / 2);
     Matrix4 cursorMat = g->getTransform();
     cursorMat.translate(highlightRect.x, highlightRect.y);
 
@@ -287,7 +301,7 @@ void VisualMain::draw() {
                         (int) highlightRect.z, (int) highlightRect.w
                     });
     }
-    txtLexerPeek->draw(g, cursorMat);
+    txtLexerCurrent->draw(g, cursorMat);
     g->setScissor();
 
     // Right: token stream
