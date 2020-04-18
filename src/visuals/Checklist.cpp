@@ -40,29 +40,25 @@ int Checklist::add(Graphics* g, const std::string& text, int parentId) {
 
   int id = items.size();
   items.push_back(item);
+  updatePositions();
   return id;
 }
 
-void Checklist::draw(Graphics* g, const Vector2& position) {
+void Checklist::updatePositions() {
   float indentSize = 10;
-  float paddingSize = 10;
-  float cursorWidth = 30;
 
   float maxTextWidth = maxSize.x + ((float)maxIndent * indentSize);
 
-  love::Matrix4 mat = g->getTransform();
-  mat.translate(position.x, position.y);
-  float yPos = position.y;
+  float yPos = 0;
 
   for (size_t i = 0; i < items.size(); ++i) {
-    auto item = items[i];
+    auto& item = items[i];
 
     float indentValue = item.indent ? (indentSize * (float)item.indent) : 0;
 
     if (i > 0) {
-      float padding = paddingSize / (float)(item.indent ? 2 : 1);
-      mat.translate(0, item.size.y + padding);
-      yPos += item.size.y + padding;
+      float paddingAmount = padding / (float)(item.indent ? 2 : 1);
+      yPos += item.size.y + paddingAmount;
     }
 
     float alignmentOffset = 0;
@@ -81,26 +77,38 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
     if (i == cursor) {
       float cursorXOffset = 0;
       if (alignment == Alignment::RIGHT) {
-        cursorXOffset = alignmentOffset + item.size.x + paddingSize;
+        cursorXOffset = alignmentOffset + item.size.x + cursorPadding;
       }
-      drawnCursorPosition = {position.x + cursorXOffset, yPos + (item.size.y / 2)};
+      cursorPosition = {cursorXOffset, yPos + (item.size.y / 2)};
 
       if (enableCursor) {
         float height = cursorWidth / 4;
-        g->rectangle(Graphics::DrawMode::DRAW_FILL,
-                     drawnCursorPosition.x, drawnCursorPosition.y - (height / 2),
-                     cursorWidth, height);
+        // Cursor arrow
+        cursorRect = {cursorPosition.x, cursorPosition.y - (height / 2),
+                      cursorWidth, height};
       }
     }
-    if (enableCursor && alignment != Alignment::RIGHT) {
-      textXOffset += cursorWidth + paddingSize;
+    if (cursorWidth > 0 && alignment != Alignment::RIGHT) {
+      textXOffset += cursorWidth + cursorPadding;
     }
 
-    love::Matrix4 textMat = mat;
-    textMat.translate(textXOffset, 0);
+    item._position = {textXOffset, yPos};
+  }
+}
+
+void Checklist::draw(Graphics* g, const Vector2& position) {
+  for (size_t i = 0; i < items.size(); ++i) {
+    auto item = items[i];
+
+    if (i == cursor && enableCursor) {
+      g->rectangle(Graphics::DrawMode::DRAW_FILL,
+                   position.x + cursorRect.x, position.y + cursorRect.y,
+                   cursorRect.z, cursorRect.w);
+    }
 
     auto origCol = g->getColor();
 
+    if (highlightUntilYPos < 0 || item._position.y < highlightUntilYPos) {
     switch (item.state) {
       case NORMAL: break;
       case REJECTED:
@@ -108,7 +116,7 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
         break;
       case PROGRESS:
         g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
-        g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + textXOffset, yPos, item.size.x, item.size.y);
+//        g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + textXOffset, yPos, item.size.x, item.size.y);
         g->setColor(origCol);
         break;
       case ACCEPTED:
@@ -118,6 +126,9 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
         g->setColor(love::Colorf(0.5, 0.5, 0.5, 1));
         break;
     }
+    }
+    love::Matrix4 textMat;
+    textMat.translate(position.x + item._position.x, position.y + item._position.y);
     item.text->draw(g, textMat);
 
     g->setColor(origCol);
@@ -127,6 +138,8 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
 void Checklist::next() {
   if (cursor + 1 < items.size()) {
     cursor++;
+
+    updatePositions();
   }
 }
 
@@ -167,6 +180,8 @@ void Checklist::accept(unsigned int index, bool isFinal) {
     // Mark as ignored
     items[i].state = ChecklistItemState::IGNORED;
   }
+
+  updatePositions();
 }
 
 void Checklist::reset() {
@@ -174,8 +189,10 @@ void Checklist::reset() {
     item.state = ChecklistItemState::NORMAL;
   }
   cursor = 0;
+
+  updatePositions();
 }
 
-Vector2 Checklist::getDrawnCursorPosition() {
-  return drawnCursorPosition;
+Vector2 Checklist::getCursorPosition() {
+  return cursorPosition;
 }

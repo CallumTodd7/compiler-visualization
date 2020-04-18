@@ -6,6 +6,7 @@
 #define COMPILER_VISUALIZATION_HIGHLIGHTABLETEXT_H
 
 #import <string>
+#import <functional>
 #include <modules/graphics/opengl/Graphics.h>
 #include <modules/graphics/Text.h>
 #include <modules/graphics/Font.h>
@@ -25,11 +26,13 @@ private:
   love::Colorf colour;
 
   bool showHighlight = false;
-  love::Vector4 highlightPositions;
+  Tween<love::Vector4> highlightRect;
   love::Colorf highlightColour = love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.0f, 1);
+  int pastStartLineHighlight = -1;
+  int pastStartPosHighlight = -1;
+
   bool showPeekHighlight = false;
-//  love::Vector4 peekHighlightPositions;
-  Tween<love::Vector4> peekHighlightPositions;
+  Tween<love::Vector4> peekHighlightRect;
   love::Colorf peekHighlightColour = love::Colorf(187 / 255.0f, 38 / 255.0f, 186 / 255.0f, 1);
 
 public:
@@ -41,9 +44,18 @@ public:
 
   void highlight(int startLine, int startPos, int endLine, int endPos);
   void highlightPeek(int startLine, int startPos, int endLine, int endPos);
+  void unhighlightPeek();
 
-  bool hasActiveTweens() {
-    return peekHighlightPositions.isActive();
+  bool hasActiveAnimations() {
+    return highlightRect.isActive()
+        || peekHighlightRect.isActive();
+  }
+
+  love::Vector4 getHighlightRect() {
+    return highlightRect.get();
+  }
+  love::Vector4 getPeekHighlightRect() {
+    return peekHighlightRect.get();
   }
 
 };

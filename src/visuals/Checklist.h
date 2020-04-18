@@ -12,6 +12,7 @@
 
 using love::graphics::opengl::Graphics;
 using love::Vector2;
+using love::Vector4;
 
 enum ChecklistItemState {
   NORMAL,
@@ -28,6 +29,8 @@ struct ChecklistItem {
   int parent;
   bool hasChildren = false;
   ChecklistItemState state;
+
+  Vector2 _position = {};
 };
 
 enum Alignment {
@@ -40,6 +43,10 @@ class Checklist {
 public:
   Alignment alignment = Alignment::LEFT;
   bool enableCursor = true;
+  float cursorWidth = 30;
+  float cursorPadding = 30;
+  float padding = 10;
+  float highlightUntilYPos = -1;
 
 private:
   std::vector<ChecklistItem> items;
@@ -48,7 +55,9 @@ private:
   Vector2 maxSize = Vector2(0, 0);
   unsigned char maxIndent = 0;
 
-  Vector2 drawnCursorPosition;
+  Vector2 cursorPosition;
+
+  Vector4 cursorRect = {};
 
 public:
   int add(Graphics* g, const std::string& text, int parentId = -1);
@@ -59,9 +68,14 @@ public:
 
   void draw(Graphics* g, const Vector2& position);
 
-  Vector2 getDrawnCursorPosition();
+  Vector2 getCursorPosition();
+
+  unsigned int getCursor() {
+    return cursor;
+  }
 
 private:
+  void updatePositions();
 
 };
 

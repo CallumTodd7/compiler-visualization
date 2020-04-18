@@ -127,6 +127,8 @@ int main(int argc, char* argv[]) {
 
     timer->step();
 
+    double timeModifier = 1.0f;
+
     // Loop
     SDL_Event evt;
     bool isRunning = true;
@@ -142,12 +144,22 @@ int main(int argc, char* argv[]) {
             } else if (evt.key.keysym.sym == SDLK_SPACE && !hasCompilerStarted) {
               threadSync.runWorker();
               hasCompilerStarted = true;
+            } else if (evt.key.keysym.sym == SDLK_MINUS) {
+              timeModifier /= 1.2;
+              std::cout << "Timer modifier: " << timeModifier << std::endl;
+            } else if (evt.key.keysym.sym == SDLK_EQUALS) {
+              timeModifier *= 1.2;
+              std::cout << "Timer modifier: " << timeModifier << std::endl;
+            } else if (evt.key.keysym.sym == SDLK_0) {
+              timeModifier = 1;
+              std::cout << "Timer modifier: " << timeModifier << std::endl;
             }
             break;
         }
       }
 
       double dt = timer->step();
+      dt *= timeModifier;
 
       visuals.update(dt);
 

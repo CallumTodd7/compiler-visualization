@@ -39,7 +39,8 @@ void VisualMain::requestNextData() {
   threadSync->getData([&](const Data& data) {
 //    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
     switch (data.type) {
-      case Data::Type::NOOP: break;
+      case Data::Type::NOOP:
+        break;
       case Data::Type::MODE_CHANGE:
         setupNewMode(data);
         break;
@@ -68,9 +69,8 @@ void VisualMain::init() {
   window->requestAttention(false);
 
   txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
-  txtLexerCurrent = g->newText(g->getFont());
+//  txtLexerCurrent = g->newText(g->getFont());
   txtLexerPeek = g->newText(g->getFont());
-  txtLexerTextCursor = g->newText(g->getFont());
 
   sourceCode.init(g);
   sourceCode.position.x = 10;
@@ -78,6 +78,8 @@ void VisualMain::init() {
 
   lexerChecklist.alignment = Alignment::RIGHT;
   lexerChecklist.enableCursor = false;
+  lexerChecklist.cursorPadding = 20;
+  lexerChecklist.cursorWidth = (float) g->getFont()->getWidth('0');
 
   lexerChecklist.add(g, "End of file");
   lexerChecklist.add(g, "Digit");
@@ -111,100 +113,88 @@ void VisualMain::setupNewMode(const Data& data) {
 
 void VisualMain::handleLexerData(const Data& data) {
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
+    txtLexerPeekPos.set({lexerChecklist.getCursorPosition().x, -(g->getFont()->getHeight() + lexerChecklist.padding)});
     sourceCode.highlightPeek(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                              data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
-  } else {
+    lexerCurrentIsPeek = true;
+  } else if (data.lexerState == Data::LexerState::WORD_UPDATE) {
     sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                          data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
+    lexerCurrentIsPeek = false;
   }
-  //if (data.lexerState == Data::LexerState::END_OF_FILE)
-  //if (data.lexerState == Data::LexerState::UNKNOWN)
 
   if (data.peekedChar > 0) {
     txtLexerPeek->set(buildColoredString(std::string(1, data.peekedChar), g));
   }
 
   if (data.lexerState == Data::LexerState::WORD_UPDATE
-  // TODO The below END_* should be removed; this will make way for the floating token
-      || data.lexerState == Data::LexerState::END_NUMBER
-      || data.lexerState == Data::LexerState::END_STRING
-      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
-      || data.lexerState == Data::LexerState::END_ALPHA_IDENT
-      || data.lexerState == Data::LexerState::END_OP
+    // TODO The below END_* should be removed; this will make way for the floating token
+//      || data.lexerState == Data::LexerState::END_NUMBER
+//      || data.lexerState == Data::LexerState::END_STRING
+//      || data.lexerState == Data::LexerState::END_ALPHA_KEYWORD
+//      || data.lexerState == Data::LexerState::END_ALPHA_IDENT
+//      || data.lexerState == Data::LexerState::END_OP
       ) {
-    txtLexerCurrent->set(buildColoredString(data.string, g));
+//    txtLexerCurrent->set(buildColoredString(data.string, g));
+    txtLexerPeek->set(buildColoredString(data.string, g));
+    if (data.string.size() > 1) {
+      shouldScissorLexerCurrent = true;
+    }
   } else {
-    txtLexerCurrent->clear();
+//    txtLexerCurrent->clear();
   }
 
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
     lexerChecklist.reset();
-    txtLexerCurrent->clear();
+//    txtLexerCurrent->clear();
     return;
   }
 
+  auto moveToPos = [&](int travelIndexDistance, double wait = 0.0) {
+    shouldShowAllChecklistHighlighting = false;
+    txtLexerPeekPos
+        .startAtCurrent({})
+        .goTo(lexerChecklist.getCursorPosition(), 0.5 * travelIndexDistance)
+        .callback([&] {
+          shouldScissorLexerCurrent = false;
+          sourceCode.unhighlightPeek();
+          shouldShowAllChecklistHighlighting = true;
+        })
+        .wait(wait)
+        .finish();
+  };
+
   if (data.lexerState == Data::LexerState::END_OF_FILE) {
     lexerChecklist.accept(0, true);
+    moveToPos(0);
   } else if (data.lexerState == Data::LexerState::START_NUMBER) {
     lexerChecklist.accept(1, false);
+    moveToPos(1);
   } else if (data.lexerState == Data::LexerState::END_NUMBER) {
     lexerChecklist.accept(1, true);
   } else if (data.lexerState == Data::LexerState::START_STRING) {
     lexerChecklist.accept(2, false);
+    moveToPos(2);
   } else if (data.lexerState == Data::LexerState::END_STRING) {
     lexerChecklist.accept(2, true);
   } else if (data.lexerState == Data::LexerState::START_ALPHA) {
     lexerChecklist.accept(3, false);
+    moveToPos(3);
   } else if (data.lexerState == Data::LexerState::END_ALPHA_KEYWORD) {
     lexerChecklist.accept(4, true);
+    moveToPos(1, 1.0);
   } else if (data.lexerState == Data::LexerState::END_ALPHA_IDENT) {
     lexerChecklist.accept(5, true);
+    moveToPos(2, 1.0);
   } else if (data.lexerState == Data::LexerState::START_OP) {
     lexerChecklist.accept(6, false);
+    moveToPos(6);
   } else if (data.lexerState == Data::LexerState::END_OP) {
     lexerChecklist.accept(6, true);
   } else if (data.lexerState == Data::LexerState::UNKNOWN) {
     lexerChecklist.accept(7, true);
+    moveToPos(7);
   }
-
-//  if (data.lexerState == Data::LexerState::END_OF_FILE
-//      || data.lexerState == Data::LexerState::START_NUMBER
-//      || data.lexerState == Data::LexerState::START_STRING
-//      || data.lexerState == Data::LexerState::START_ALPHA
-//      || data.lexerState == Data::LexerState::START_OP) {
-//    if (data.lexerState == Data::LexerState::END_OF_FILE) {
-//      lexerChecklist.accept();
-//    } else {
-//      lexerChecklist.next();
-//    }
-//
-//    if (data.lexerState == Data::LexerState::START_NUMBER) {
-//      lexerChecklist.accept();
-//    } else {
-//      lexerChecklist.next();
-//    }
-//
-//    if (data.lexerState == Data::LexerState::START_STRING) {
-//      lexerChecklist.accept();
-//    } else {
-//      lexerChecklist.next();
-//    }
-//
-//    if (data.lexerState == Data::LexerState::START_ALPHA) {
-//      lexerChecklist.accept();
-//    } else {
-//      lexerChecklist.next();
-//      lexerChecklist.next();
-//      lexerChecklist.next();
-//    }
-//
-//    if (data.lexerState == Data::LexerState::START_OP) {
-//      lexerChecklist.accept();
-//    } else {
-//      lexerChecklist.next();
-//      lexerChecklist.accept();
-//    }
-//  }
 }
 
 void VisualMain::handleParserData(const Data& data) {
@@ -215,25 +205,25 @@ void VisualMain::handleCodeGenData(const Data& data) {
 
 }
 
-int pastTime = -1;
-bool activeTweens = false;
-void VisualMain::update(double dt) {
-//  if ((int) Timer::getTime() != pastTime) {
-//    requestNextData();
-//    pastTime = (int) Timer::getTime();
-//    return;
-//  }
+bool activeAnimations = false;
 
-  if (pastTime > 300 && !activeTweens) {
-//    std::cout << "Req data" << std::endl;
+void VisualMain::update(double dt) {
+  if (!activeAnimations) {
     requestNextData();
-    pastTime = -1;
   }
-  pastTime++;
 
   sourceCode.update(dt, 0);
+  txtLexerPeekPos.update(dt);
 
-  activeTweens = sourceCode.hasActiveTweens();
+  if (!shouldShowAllChecklistHighlighting) {
+    auto yPos = txtLexerPeekPos.get().y;
+    lexerChecklist.highlightUntilYPos = fmax(0, yPos);
+  } else {
+    lexerChecklist.highlightUntilYPos = -1;
+  }
+
+  activeAnimations = sourceCode.hasActiveAnimations()
+      || txtLexerPeekPos.isActive();
 }
 
 void VisualMain::draw() {
@@ -250,27 +240,55 @@ void VisualMain::draw() {
     // Middle: checklist
     float padding = 5;
     mat = g->getTransform();
-    float y = 10;
+    float y = 40;
     mat.translate((float) g->getWidth() / 2.0f + padding, y + padding);
-    txtLexerPeek->draw(g, mat);
+//    txtLexerPeek->draw(g, mat);
 
-    mat.translate(50, 0);
-    txtLexerCurrent->draw(g, mat);
-    Vector2 rectSize = {300, g->getFont()->getHeight() + (padding * 2.0f)};
-    g->push(Graphics::StackType::STACK_ALL);
-    g->setColor(Colorf(1, 1, 0, 1));
-    g->rectangle(Graphics::DrawMode::DRAW_LINE, (float) g->getWidth() / 2.0f, y, rectSize.x, rectSize.y);
-    g->pop();
-    y += rectSize.y;
-    y += padding * 2.0f;
+//    mat.translate(50, 0);
+//    txtLexerCurrent->draw(g, mat);
+//    Vector2 rectSize = {300, g->getFont()->getHeight() + (padding * 2.0f)};
+//    g->push(Graphics::StackType::STACK_ALL);
+//    g->setColor(Colorf(1, 1, 0, 1));
+//    g->rectangle(Graphics::DrawMode::DRAW_LINE, (float) g->getWidth() / 2.0f, y, rectSize.x, rectSize.y);
+//    g->pop();
+//    y += rectSize.y;
+//    y += padding * 2.0f;
 
     lexerChecklist.draw(g, {(float) g->getWidth() / 2.0f, y});
-    Vector2 cursorPos = lexerChecklist.getDrawnCursorPosition();
 
+    Vector2 cursorPos = txtLexerPeekPos.get();
+    Vector4 highlightRect;
+    if (lexerCurrentIsPeek) {
+      highlightRect = sourceCode.getPeekHighlightRect();
+    } else {
+      highlightRect = sourceCode.getHighlightRect();
+    }
+    highlightRect.x = ((float) g->getWidth() / 2.0f) + cursorPos.x;
+    highlightRect.y = y + cursorPos.y - ((float) txtLexerPeek->getHeight() / 2);
     Matrix4 cursorMat = g->getTransform();
-    cursorMat.translate(cursorPos.x, cursorPos.y - ((float)g->getFont()->getHeight() / 2));
-    txtLexerTextCursor->draw(g, cursorMat);
-//    g->rectangle(Graphics::DrawMode::DRAW_FILL, cursorPos.x, cursorPos.y - 5, 10, 10);
+    cursorMat.translate(highlightRect.x, highlightRect.y);
+
+    auto origCol = g->getColor();
+    if (lexerCurrentIsPeek) {
+      love::Colorf peekHighlightColour = love::Colorf(187 / 255.0f, 38 / 255.0f, 186 / 255.0f, 1);
+      g->setColor(peekHighlightColour);
+    } else {
+      love::Colorf highlightColour = love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.0f, 1);
+      g->setColor(highlightColour);
+    }
+    g->rectangle(Graphics::DrawMode::DRAW_FILL,
+                 highlightRect.x, highlightRect.y,
+                 highlightRect.z, highlightRect.w);
+    g->setColor(origCol);
+
+    if (shouldScissorLexerCurrent) {
+      g->setScissor({
+                        (int) highlightRect.x, (int) highlightRect.y,
+                        (int) highlightRect.z, (int) highlightRect.w
+                    });
+    }
+    txtLexerPeek->draw(g, cursorMat);
+    g->setScissor();
 
     // Right: token stream
   }

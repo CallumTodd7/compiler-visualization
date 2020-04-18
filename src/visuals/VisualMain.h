@@ -43,10 +43,14 @@ private:
   Text* txtTitle = nullptr;
   HighlightableText sourceCode;
 
-  Text* txtLexerPeek = nullptr;
-  Text* txtLexerCurrent = nullptr;
-  Text* txtLexerTextCursor = nullptr;
+//  Text* txtLexerCurrent = nullptr;
+
   Checklist lexerChecklist;
+  bool lexerCurrentIsPeek = false;
+  bool shouldScissorLexerCurrent = true;
+  bool shouldShowAllChecklistHighlighting = true;
+  Tween<Vector2> txtLexerPeekPos;
+  Text* txtLexerPeek = nullptr;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
