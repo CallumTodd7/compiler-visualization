@@ -9,6 +9,16 @@
 
 // Font
 #include "SourceCodePro-regular.ttf.h"
+#include "font/Vera.ttf.h"
+
+class VeraFontData : public love::Data {
+public:
+  Data* clone() const override { return new VeraFontData(); }
+
+  void* getData() const override { return Vera_ttf; }
+
+  size_t getSize() const override { return sizeof(Vera_ttf); }
+};
 
 class SourceCodeProFontData : public love::Data {
 public:
@@ -52,6 +62,19 @@ VisualMain::VisualMain(ThreadSync* threadSync, Timer* timer)
   window->setWindowTitle("Compiler Visualisation");
 }
 
+VisualMain::~VisualMain() {
+  if (timer) timer->release();
+  if (g) g->release();
+  if (window) window->release();
+  if (font) font->release();
+
+  if (fontVeraRegular18) fontVeraRegular18->release();
+  if (fontSourceCodeProRegular20) fontSourceCodeProRegular20->release();
+
+  if (txtTitle) txtTitle->release();
+  if (txtLexerCurrent) txtLexerCurrent->release();
+}
+
 void VisualMain::requestNextData() {
   threadSync->getData([&](const Data& data) {
 //    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
@@ -63,6 +86,8 @@ void VisualMain::requestNextData() {
         break;
       case Data::Type::SPECIFIC:
         switch (data.mode) {
+          case Data::START:
+            break;
           case Data::LEXER:
             handleLexerData(data);
             break;
@@ -99,16 +124,19 @@ void VisualMain::init() {
   g->setActive(true);
   window->requestAttention(false);
 
+  fontVeraRegular18 = genFont<VeraFontData>(18, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
   fontSourceCodeProRegular20 = genFont<SourceCodeProFontData>(20, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
   g->setFont(fontSourceCodeProRegular20);
 
   titleHeight = g->getFont()->getHeight() + 20;
 
-  txtTitle = g->newText(g->getFont(), buildColoredString("Press [SPACE] to start", g));
+  txtTitle = g->newText(fontVeraRegular18, buildColoredString("Press [SPACE] to start", g));
   txtLexerCurrent = g->newText(g->getFont());
 
   tokenStream.padding = {10, 0};
   tokenStream.position = {(float) g->getWidth() - TokenStream::tokenWidth - tokenStream.padding.x * 2, titleHeight};
+  tokenStream.tokenTypeFont = fontSourceCodeProRegular20;
+  tokenStream.valueFont = fontSourceCodeProRegular20;
 
   sourceCode.init(g);
   sourceCode.position.x = 10;
@@ -122,6 +150,8 @@ void VisualMain::init() {
   lexerChecklist.cursorWidth = charWidth;
   lexerChecklist.indentSize = charWidth * 2;
 
+  auto origFont = g->getFont();
+  g->setFont(fontVeraRegular18);
   lexerChecklist.add(g, "End of file");
   lexerChecklist.add(g, "Digit");
   lexerChecklist.add(g, "String");
@@ -130,20 +160,25 @@ void VisualMain::init() {
   lexerChecklist.add(g, "Identifier", alphaId);
   lexerChecklist.add(g, "Operator");
   lexerChecklist.add(g, "Error: Unknown token");
+  g->setFont(origFont);
 }
 
 void VisualMain::setupNewMode(const Data& data) {
   state = data.mode;
   switch (state) {
+    case Data::START:
+      break;
     case Data::LEXER:
       txtTitle->set(buildColoredString("Lexing", g));
       sourceCode.load(data.filepath);
       break;
     case Data::PARSER:
       txtTitle->set(buildColoredString("Parsing", g));
+      txtLexerCurrentPos.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
       break;
     case Data::CODE_GEN:
       txtTitle->set(buildColoredString("Code Generation", g));
+      txtLexerCurrentPos.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
       break;
     case Data::FINISHED:
       txtTitle->set(buildColoredString("Done!", g));
@@ -155,13 +190,17 @@ void VisualMain::handleLexerData(const Data& data) {
   if (data.lexerState == Data::LexerState::NEW_TOKEN) {
     txtLexerCurrentPos.set({
                                lexerChecklist.getCursorPosition().x,
-                               lexerChecklist.position.y
+                               lexerChecklist.position.y + lexerChecklist.padding
                            });
     isLexerCurrentVisible = true;
+
     sourceCode.highlightPeek(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                              data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
     lexerCurrentIsPeek = true;
   } else if (data.lexerState == Data::LexerState::WORD_UPDATE) {
+    sourceCode.highlightPeek(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
+                             data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos + 1,
+                             data.lexerContextStart.characterPos == data.lexerContextEnd.characterPos ? 0.5 : 0.0);
     sourceCode.highlight(data.lexerContextStart.lineNumber, data.lexerContextStart.characterPos,
                          data.lexerContextEnd.lineNumber, data.lexerContextEnd.characterPos);
     lexerCurrentIsPeek = false;
@@ -172,8 +211,7 @@ void VisualMain::handleLexerData(const Data& data) {
     isLexerCurrentVisible = true;
   }
 
-  if (data.lexerState == Data::LexerState::WORD_UPDATE
-      ) {
+  if (data.lexerState == Data::LexerState::WORD_UPDATE) {
     txtLexerCurrent->set(buildColoredString(data.string, g));
     isLexerCurrentVisible = true;
     if (data.string.size() > 1) {
@@ -193,8 +231,8 @@ void VisualMain::handleLexerData(const Data& data) {
         .goTo(lexerChecklist.getCursorPosition(), 0.5 * travelIndexDistance)
         .callback([&] {
           shouldScissorLexerCurrent = false;
-          sourceCode.unhighlightPeek();
           shouldShowAllChecklistHighlighting = true;
+          sourceCode.unhighlightPeek();
         })
         .wait(wait)
         .callback(callback)
@@ -238,8 +276,10 @@ void VisualMain::handleLexerData(const Data& data) {
     moveToPos(6);
   } else if (data.lexerState == Data::LexerState::END_OP) {
     lexerChecklist.accept(6, true);
-    tokenStream.add(lexerChecklist.getCursorPosition(false), data.tokenType);
-    isLexerCurrentVisible = false;
+    moveToPos(0, 0.5, [&] {
+      tokenStream.add(lexerChecklist.getCursorPosition(false), data.tokenType);
+      isLexerCurrentVisible = false;
+    });
   } else if (data.lexerState == Data::LexerState::UNKNOWN) {
     lexerChecklist.accept(7, true);
     moveToPos(7);
@@ -261,10 +301,6 @@ void VisualMain::update(double dt) {
     requestNextData();
   }
 
-  sourceCode.update(dt);
-  tokenStream.update(dt);
-  txtLexerCurrentPos.update(dt);
-
   if (!shouldShowAllChecklistHighlighting) {
     auto yPos = txtLexerCurrentPos.get().y;
     lexerChecklist.highlightUntilYPos = fmax(0, yPos);
@@ -272,25 +308,43 @@ void VisualMain::update(double dt) {
     lexerChecklist.highlightUntilYPos = -1;
   }
 
+  sourceCode.update(dt);
+  tokenStream.update(dt);
+  txtLexerCurrentPos.update(dt);
+
   activeAnimations = sourceCode.hasActiveAnimations()
       || tokenStream.hasActiveAnimations()
       || txtLexerCurrentPos.isActive();
 }
 
 void VisualMain::draw() {
-//  g->rectangle(Graphics::DrawMode::DRAW_LINE, 10, 10, 100, 100);
-
   Matrix4 mat = g->getTransform();
-  mat.translate(10, 10);
+  mat.translate(10, 5);
   txtTitle->draw(g, mat);
+
+  // Separator
+  {
+    std::vector<Vector2> lineVerts = {
+        {0,                     titleHeight - 10},
+        {(float) g->getWidth(), titleHeight - 10},
+    };
+    g->polyline(&lineVerts[0], lineVerts.size());
+  }
 
   if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
     // Left: source code
     sourceCode.draw(g);
 
-    // Middle: checklist
-    float y = titleHeight;
+    // Separator
+    {
+      std::vector<Vector2> lineVerts = {
+          {lexerChecklist.position.x, titleHeight - 10},
+          {lexerChecklist.position.x, (float) g->getHeight()},
+      };
+      g->polyline(&lineVerts[0], lineVerts.size());
+    }
 
+    // Middle: checklist
     lexerChecklist.draw(g);
 
     if (isLexerCurrentVisible) {
@@ -327,6 +381,15 @@ void VisualMain::draw() {
       }
       txtLexerCurrent->draw(g, cursorMat);
       g->setScissor();
+    }
+
+    // Separator
+    {
+      std::vector<Vector2> lineVerts = {
+          {tokenStream.position.x, titleHeight - 10},
+          {tokenStream.position.x, (float) g->getHeight()},
+      };
+      g->polyline(&lineVerts[0], lineVerts.size());
     }
 
     // Right: token stream

@@ -67,7 +67,9 @@ private:
       return *this;
     }
     Builder& callback(std::function<void()> callback) {
-      stages.back().callback = callback;
+      if (callback) {
+        stages.back().callback = callback;
+      }
       return *this;
     }
     Builder& callbackOnAll(std::function<void()> callback) {

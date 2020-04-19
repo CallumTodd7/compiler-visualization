@@ -11,11 +11,20 @@ using love::graphics::Graphics;
 float TokenStream::tokenWidth = 250;
 float TokenStream::tokenPadding = 3;
 
-VisualToken::VisualToken(const std::string& tokenType, const std::string& value, const love::Vector2& position)
+VisualToken::VisualToken(const std::string& tokenType, const std::string& value, const love::Vector2& position,
+                         love::graphics::Font* tokenTypeFont, love::graphics::Font* valueFont)
     : position(position) {
   auto* g = love::Module::getInstance<love::graphics::Graphics>(love::Module::ModuleType::M_GRAPHICS);
-  txtType = g->newText(g->getFont(), buildColoredString(tokenType, g));
-  txtValue = g->newText(g->getFont(), buildColoredString(value, g));
+
+  if (!tokenTypeFont) {
+    tokenTypeFont = g->getFont();
+  }
+  if (!valueFont) {
+    valueFont = g->getFont();
+  }
+
+  txtType = g->newText(tokenTypeFont, buildColoredString(tokenType, g));
+  txtValue = g->newText(valueFont, buildColoredString(value, g));
 }
 
 VisualToken::~VisualToken() {
@@ -52,7 +61,7 @@ TokenStream::~TokenStream() {
 void TokenStream::add(const love::Vector2& startPosition, const std::string& tokenType, const std::string& value) {
   love::Vector2 endPosition = getNextPosition();
 
-  tokenInFlight = new VisualToken(tokenType, value, endPosition);
+  tokenInFlight = new VisualToken(tokenType, value, endPosition, tokenTypeFont, valueFont);
 
   tokenInFlightPosition
       .startAt(startPosition, false)

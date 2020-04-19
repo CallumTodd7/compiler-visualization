@@ -21,7 +21,8 @@ public:
   love::Vector2 position;
 
 public:
-  VisualToken(const std::string& tokenType, const std::string& value, const love::Vector2& position);
+  VisualToken(const std::string& tokenType, const std::string& value, const love::Vector2& position,
+              love::graphics::Font* tokenTypeFont = nullptr, love::graphics::Font* valueFont = nullptr);
   ~VisualToken();
 
   void draw(love::graphics::Graphics* g, const love::Vector2& pos);
@@ -40,6 +41,9 @@ public:
 
   love::Vector2 position = {0, 0};
   love::Vector2 padding = {0, 0};
+
+  love::graphics::Font* tokenTypeFont = nullptr;
+  love::graphics::Font* valueFont = nullptr;
 
 public:
   ~TokenStream();

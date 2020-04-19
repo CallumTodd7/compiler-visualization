@@ -30,6 +30,8 @@ private:
   love::Colorf highlightColour = love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.0f, 1);
   int pastStartLineHighlight = -1;
   int pastStartPosHighlight = -1;
+  int pastStartLinePeekHighlight = -1;
+  int pastStartPosPeekHighlight = -1;
 
   bool showPeekHighlight = false;
   Tween<love::Vector4> peekHighlightRect;
@@ -43,7 +45,7 @@ public:
   void draw(Graphics* g);
 
   void highlight(int startLine, int startPos, int endLine, int endPos);
-  void highlightPeek(int startLine, int startPos, int endLine, int endPos);
+  void highlightPeek(int startLine, int startPos, int endLine, int endPos, double prewait = 0.0);
   void unhighlightPeek();
 
   bool hasActiveAnimations() {

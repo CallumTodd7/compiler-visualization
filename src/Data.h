@@ -17,6 +17,7 @@ struct Data {
   friend std::ostream& operator<<(std::ostream& os, const Type& type);
 
   enum Mode {
+    START = 0,
     LEXER,
     PARSER,
     CODE_GEN,

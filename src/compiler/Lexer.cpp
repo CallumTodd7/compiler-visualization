@@ -198,6 +198,17 @@ Token Lexer::nextToken() {
 
     Token operatorToken = readOperator(lexerContext);
 
+//    if (currentLinePos - lexerContext.characterPos > 1) {
+//      ready({
+//                .mode = Data::Mode::LEXER,
+//                .type = Data::Type::SPECIFIC,
+//                .lexerState = Data::LexerState::WORD_UPDATE,
+//                .lexerContextStart = lexerContext,
+//                .lexerContextEnd = getContext().sub1Pos(),
+//                .string = std::string(1, currentChar),
+//            });
+//    }
+
     if (operatorToken.type != Token::Type::TOKEN_ERROR) {
       ready({
                 .mode = Data::Mode::LEXER,

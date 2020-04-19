@@ -30,7 +30,7 @@ int Checklist::add(Graphics* g, const std::string& text, int parentId) {
     maxSize.y = size.y;
   }
 
-  ChecklistItem item {
+  ChecklistItem item{
       .text = textObj,
       .size = size,
       .parent = parentId,
@@ -45,17 +45,17 @@ int Checklist::add(Graphics* g, const std::string& text, int parentId) {
 }
 
 void Checklist::updatePositions() {
-  float maxTextWidth = maxSize.x + ((float)maxIndent * indentSize);
+  float maxTextWidth = maxSize.x + ((float) maxIndent * indentSize);
 
   float yPos = 0;
 
   for (size_t i = 0; i < items.size(); ++i) {
     auto& item = items[i];
 
-    float indentValue = item.indent ? (indentSize * (float)item.indent) : 0;
+    float indentValue = item.indent ? (indentSize * (float) item.indent) : 0;
 
     if (i > 0) {
-      float paddingAmount = padding / (float)(item.indent ? 2 : 1);
+      float paddingAmount = padding / (float) (item.indent ? 2 : 1);
       yPos += item.size.y + paddingAmount;
     } else {
       // Initial offset
@@ -110,23 +110,24 @@ void Checklist::draw(Graphics* g) {
     auto origCol = g->getColor();
 
     if (highlightUntilYPos < 0 || item._position.y < highlightUntilYPos) {
-    switch (item.state) {
-      case NORMAL: break;
-      case REJECTED:
-        g->setColor(love::Colorf(1, 0, 0, 1));
-        break;
-      case PROGRESS:
-        g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
+      switch (item.state) {
+        case NORMAL:
+          break;
+        case REJECTED:
+          g->setColor(love::Colorf(1, 0, 0, 1));
+          break;
+        case PROGRESS:
+          g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
 //        g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + textXOffset, yPos, item.size.x, item.size.y);
-        g->setColor(origCol);
-        break;
-      case ACCEPTED:
-        g->setColor(love::Colorf(0, 1, 0, 1));
-        break;
-      case IGNORED:
-        g->setColor(love::Colorf(0.5, 0.5, 0.5, 1));
-        break;
-    }
+          g->setColor(origCol);
+          break;
+        case ACCEPTED:
+          g->setColor(love::Colorf(0, 1, 0, 1));
+          break;
+        case IGNORED:
+          g->setColor(love::Colorf(0.5, 0.5, 0.5, 1));
+          break;
+      }
     }
     love::Matrix4 textMat;
     textMat.translate(item._position.x, item._position.y);

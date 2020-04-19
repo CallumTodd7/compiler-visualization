@@ -21,6 +21,9 @@ std::ostream& operator<<(std::ostream& os, const Data::Type& type) {
 
 std::ostream& operator<<(std::ostream& os, const Data::Mode& mode) {
   switch (mode) {
+    case Data::Mode::START:
+      os << "START";
+      break;
     case Data::Mode::LEXER:
       os << "LEXER";
       break;

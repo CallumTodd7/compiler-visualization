@@ -39,9 +39,10 @@ private:
   Window* window;
   love::font::freetype::Font* font;
 
+  love::graphics::Font* fontVeraRegular18 = nullptr;
   love::graphics::Font* fontSourceCodeProRegular20 = nullptr;
 
-  Data::Mode state = Data::Mode::LEXER;
+  Data::Mode state = Data::Mode::START;
 
   float titleHeight = 0;
   Text* txtTitle = nullptr;
@@ -60,6 +61,7 @@ private:
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
+  ~VisualMain();
 
   void init();
   void update(double dt);

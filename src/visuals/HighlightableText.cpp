@@ -54,30 +54,34 @@ void HighlightableText::draw(Graphics* g) {
   }
 }
 
-void HighlightableText::highlightPeek(int startLine, int startPos, int endLine, int endPos) {
+void HighlightableText::highlightPeek(int startLine, int startPos, int endLine, int endPos, double prewait) {
   try {
-    const std::string& str = textStrings.at(startLine - 1).str;
+    std::string str = textStrings.at(startLine - 1).str;
+    auto lastTextPos = str.find_first_of("\r\n");
+    if (lastTextPos != std::string::npos) {
+      str.insert(lastTextPos, "-");
+    }
 
-    float x1 = (float) font->getWidth(str.substr(0, startPos - 1));
-    float x2 = (float) font->getWidth(str.substr(startPos - 1, endPos - startPos + 1));
+    float x = (float) font->getWidth(str.substr(0, startPos - 1));
+    float width = (float) font->getWidth(str.substr(startPos - 1, endPos - startPos + 1));
 
-    love::Vector4 a = {x1, font->getHeight() * (float) (startLine - 1), 0, font->getHeight()};
-    love::Vector4 b = {x1, font->getHeight() * (float) (startLine - 1), x2, font->getHeight()};
+    love::Vector4 a = {x, font->getHeight() * (float) (startLine - 1), 0, font->getHeight()};
+    love::Vector4 b = {x, font->getHeight() * (float) (startLine - 1), width, font->getHeight()};
 
-//    peekHighlightRect
-//        .startAt(a)
-//        .goTo(b, 0.5)
-//        .wait(0.5)
-//        .goTo(a, 0.5)
-//        .finish();
+    bool hasStartPositionMoved = pastStartLinePeekHighlight != startLine || pastStartPosPeekHighlight != startPos;
     peekHighlightRect
-        .startAt(a)
+        .startAt(a, !hasStartPositionMoved)
+        .wait(prewait)
         .goTo(b, 0.5)
+        .wait(0.5)
         .finish();
 
     showPeekHighlight = true;
     showHighlight = false;
   } catch (std::out_of_range&) {}
+
+  pastStartLinePeekHighlight = startLine;
+  pastStartPosPeekHighlight = startPos;
 }
 
 void HighlightableText::highlight(int startLine, int startPos, int endLine, int endPos) {
