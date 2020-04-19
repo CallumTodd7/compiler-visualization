@@ -121,6 +121,7 @@ Token Lexer::nextToken() {
               .lexerContextStart = lexerContext,
               .lexerContextEnd = getContext().sub1Pos(),
               .string = word,
+              .tokenType = (std::stringstream() << Token::Type::TOKEN_STRING).str(),
           });
 
     return {lexerContext, Token::Type::TOKEN_STRING, word};
@@ -159,7 +160,7 @@ Token Lexer::nextToken() {
                 .lexerState = Data::LexerState::END_ALPHA_KEYWORD,
                 .lexerContextStart = lexerContext,
                 .lexerContextEnd = getContext().sub1Pos(),
-                .string = (std::stringstream() << keywordToken.type).str(),
+                .tokenType = (std::stringstream() << keywordToken.type).str(),
             });
 
       return keywordToken;
@@ -172,6 +173,7 @@ Token Lexer::nextToken() {
               .lexerContextStart = lexerContext,
               .lexerContextEnd = getContext().sub1Pos(),
               .string = word,
+              .tokenType = (std::stringstream() << Token::Type::TOKEN_IDENTIFIER).str(),
           });
 
     // Must be identifier
@@ -203,7 +205,7 @@ Token Lexer::nextToken() {
                 .lexerState = Data::LexerState::END_OP,
                 .lexerContextStart = lexerContext,
                 .lexerContextEnd = getContext().sub1Pos(),
-                .string = (std::stringstream() << operatorToken.type).str(),
+                .tokenType = (std::stringstream() << operatorToken.type).str(),
             });
 
       return operatorToken;
@@ -335,6 +337,7 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
                 .lexerContextEnd = getContext().sub1Pos(),
                 .string = word,
                 .number = 0,
+                .tokenType = (std::stringstream() << Token::Type::TOKEN_INTEGER).str(),
             });
 
       // Must be a zero
@@ -374,6 +377,7 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
             .lexerContextEnd = getContext().sub1Pos(),
             .string = word,
             .number = parsedNumber,
+            .tokenType = (std::stringstream() << Token::Type::TOKEN_INTEGER).str(),
         });
 
   return {lexerContext, Token::Type::TOKEN_INTEGER, parsedNumber};

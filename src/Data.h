@@ -48,6 +48,8 @@ struct Data {
   LexerContext lexerContextStart;
   LexerContext lexerContextEnd;
 
+  std::string tokenType;
+
   std::string string;
   unsigned long long number;
   char peekedChar = 0;

@@ -57,6 +57,9 @@ void Checklist::updatePositions() {
     if (i > 0) {
       float paddingAmount = padding / (float)(item.indent ? 2 : 1);
       yPos += item.size.y + paddingAmount;
+    } else {
+      // Initial offset
+      yPos += item.size.y + padding;
     }
 
     float alignmentOffset = 0;
@@ -82,7 +85,7 @@ void Checklist::updatePositions() {
       if (enableCursor) {
         float height = cursorWidth / 4;
         // Cursor arrow
-        cursorRect = {cursorPosition.x, cursorPosition.y - (height / 2),
+        cursorRect = {position.x + cursorPosition.x, position.y + cursorPosition.y - (height / 2),
                       cursorWidth, height};
       }
     }
@@ -90,17 +93,17 @@ void Checklist::updatePositions() {
       textXOffset += cursorWidth + cursorPadding;
     }
 
-    item._position = {textXOffset, yPos};
+    item._position = {position.x + textXOffset, position.y + yPos};
   }
 }
 
-void Checklist::draw(Graphics* g, const Vector2& position) {
+void Checklist::draw(Graphics* g) {
   for (size_t i = 0; i < items.size(); ++i) {
     auto item = items[i];
 
     if (i == cursor && enableCursor) {
       g->rectangle(Graphics::DrawMode::DRAW_FILL,
-                   position.x + cursorRect.x, position.y + cursorRect.y,
+                   cursorRect.x, cursorRect.y,
                    cursorRect.z, cursorRect.w);
     }
 
@@ -126,7 +129,7 @@ void Checklist::draw(Graphics* g, const Vector2& position) {
     }
     }
     love::Matrix4 textMat;
-    textMat.translate(position.x + item._position.x, position.y + item._position.y);
+    textMat.translate(item._position.x, item._position.y);
     item.text->draw(g, textMat);
 
     g->setColor(origCol);
@@ -191,6 +194,10 @@ void Checklist::reset() {
   updatePositions();
 }
 
-Vector2 Checklist::getCursorPosition() {
-  return cursorPosition;
+Vector2 Checklist::getCursorPosition(bool verticalAlignCenter) {
+  if (verticalAlignCenter) {
+    return position + cursorPosition;
+  } else {
+    return position + cursorPosition - Vector2(0, maxSize.y / 2);
+  }
 }

@@ -17,6 +17,7 @@
 
 #include "HighlightableText.h"
 #include "Checklist.h"
+#include "TokenStream.h"
 
 using love::graphics::opengl::Shader;
 using love::graphics::ShaderStage;
@@ -42,7 +43,9 @@ private:
 
   Data::Mode state = Data::Mode::LEXER;
 
+  float titleHeight = 0;
   Text* txtTitle = nullptr;
+
   HighlightableText sourceCode;
 
   Checklist lexerChecklist;
@@ -50,7 +53,10 @@ private:
   bool shouldScissorLexerCurrent = true;
   bool shouldShowAllChecklistHighlighting = true;
   Tween<Vector2> txtLexerCurrentPos;
+  bool isLexerCurrentVisible = false;
   Text* txtLexerCurrent = nullptr;
+
+  TokenStream tokenStream;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);

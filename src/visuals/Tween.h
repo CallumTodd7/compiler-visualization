@@ -36,13 +36,12 @@ private:
   class Builder {
   private:
     Tween* tween;
-    T startValue;
-    bool setCurrent;
+    bool useExistingCurrent;
     std::vector<Stage> stages;
   public:
-    Builder(Tween* tween, T startValue, bool setCurrent)
-        : tween(tween), setCurrent(setCurrent) {
-      if (setCurrent && tween->usedOnce) {
+    Builder(Tween* tween, T startValue, bool useCurrent)
+        : tween(tween), useExistingCurrent(useCurrent) {
+      if (useCurrent && tween->usedOnce) {
         stages.push_back({false, tween->current, 0});
       } else {
         stages.push_back({false, startValue, 0});
@@ -76,12 +75,12 @@ private:
       return *this;
     }
     void finish() {
-      if (setCurrent) {
-        tween->current = startValue;
-      }
-
       tween->stages = stages;
       tween->currentStage = 1;
+
+      if (!useExistingCurrent) {
+        tween->current = tween->stages[0].dest;
+      }
 
       tween->currentTime = 0;
       tween->pastStageTime = 0;

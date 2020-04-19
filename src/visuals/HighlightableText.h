@@ -39,7 +39,7 @@ public:
   void load(const std::string& filepath);
 
   void init(Graphics* g);
-  void update(double dt, double mod);
+  void update(double dt);
   void draw(Graphics* g);
 
   void highlight(int startLine, int startPos, int endLine, int endPos);

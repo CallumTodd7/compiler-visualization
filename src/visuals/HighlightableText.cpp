@@ -22,7 +22,7 @@ void HighlightableText::load(const std::string& filepath) {
   text->set(textStrings);
 }
 
-void HighlightableText::update(double dt, double mod) {
+void HighlightableText::update(double dt) {
   highlightRect.update(dt);
   peekHighlightRect.update(dt);
 }

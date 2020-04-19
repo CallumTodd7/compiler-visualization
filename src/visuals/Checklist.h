@@ -41,6 +41,7 @@ enum Alignment {
 
 class Checklist {
 public:
+  Vector2 position;
   Alignment alignment = Alignment::LEFT;
   bool enableCursor = true;
   float cursorWidth = 30;
@@ -67,9 +68,9 @@ public:
   void accept(unsigned int index, bool isFinal);
   void reset();
 
-  void draw(Graphics* g, const Vector2& position);
+  void draw(Graphics* g);
 
-  Vector2 getCursorPosition();
+  Vector2 getCursorPosition(bool verticalAlignCenter = true);
 
   unsigned int getCursor() {
     return cursor;
