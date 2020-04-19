@@ -101,6 +101,10 @@ private:
   };
 
 public:
+  Tween() = default;
+  Tween(T startValue) {
+    set(startValue);
+  }
   Builder& startAtCurrent(T defaultValue) {
     return *(new Builder(this, defaultValue, true));
   }

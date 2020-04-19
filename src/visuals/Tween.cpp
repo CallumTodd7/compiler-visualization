@@ -6,6 +6,11 @@
 #include <common/Vector.h>
 
 template<>
+void Tween<float>::_update(double t, float& start, float& end) {
+  current = lerp(t, start, end);
+}
+
+template<>
 void Tween<love::Vector2>::_update(double t, love::Vector2& start, love::Vector2& end) {
   current.x = lerp(t, start.x, end.x);
   current.y = lerp(t, start.y, end.y);

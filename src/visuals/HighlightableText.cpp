@@ -35,8 +35,8 @@ void HighlightableText::update(double dt) {
   scrollManager.update(dt);
 }
 
-void HighlightableText::draw(Graphics* g) {
-  love::Matrix4 mat = g->getTransform();
+void HighlightableText::draw(Graphics* g, int xScissorOffset) {
+  love::Matrix4 mat;
   auto scrollOffset = getScrollOffset();
   mat.translate(position.x + padding.x + scrollOffset.x, position.y + padding.y + scrollOffset.y);
 
@@ -61,7 +61,7 @@ void HighlightableText::draw(Graphics* g) {
     }
 
     g->setScissor({
-                      (int) position.x, (int) position.y,
+                      (int) position.x + xScissorOffset, (int) position.y,
                       (int) frameSize.x, (int) frameSize.y
                   });
     text->draw(g, mat);

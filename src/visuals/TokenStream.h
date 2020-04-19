@@ -26,7 +26,7 @@ public:
               love::graphics::Font* tokenTypeFont = nullptr, love::graphics::Font* valueFont = nullptr);
   ~VisualToken();
 
-  void draw(love::graphics::Graphics* g, const love::Vector2& pos);
+  void draw(love::graphics::Graphics* g, const love::Vector2& pos, int xScissorOffset);
 };
 
 class TokenStream {
@@ -55,7 +55,7 @@ public:
   void add(const love::Vector2& startPosition, const std::string& tokenType, const std::string& value = "");
 
   void update(double dt);
-  void draw(love::graphics::Graphics* g);
+  void draw(love::graphics::Graphics* g, int xScissorOffset);
 
   bool hasActiveAnimations();
 

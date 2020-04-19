@@ -50,7 +50,7 @@ public:
 
   void init(Graphics* g);
   void update(double dt);
-  void draw(Graphics* g);
+  void draw(Graphics* g, int xScissorOffset);
 
   void highlight(int startLine, int startPos, int endLine, int endPos);
   void highlightPeek(int startLine, int startPos, int endLine, int endPos, double prewait = 0.0);

@@ -31,7 +31,7 @@ VisualToken::~VisualToken() {
   txtValue->release();
 }
 
-void VisualToken::draw(love::graphics::Graphics* g, const love::Vector2& pos) {
+void VisualToken::draw(love::graphics::Graphics* g, const love::Vector2& pos, int xScissorOffset) {
   float tokenHeight = (g->getFont()->getHeight() + TokenStream::tokenPadding) * 2;
 
   auto origCol = g->getColor();
@@ -45,10 +45,10 @@ void VisualToken::draw(love::graphics::Graphics* g, const love::Vector2& pos) {
                TokenStream::tokenWidth, tokenHeight);
 
   g->intersectScissor({
-                          (int) pos.x, (int) pos.y,
+                          (int) pos.x + xScissorOffset, (int) pos.y,
                           (int) TokenStream::tokenWidth, (int) tokenHeight
                       });
-  auto mat = g->getTransform();
+  love::Matrix4 mat;
   mat.translate(pos.x + TokenStream::tokenPadding, pos.y + TokenStream::tokenPadding);
   txtType->draw(g, mat);
   mat.translate(0, g->getFont()->getHeight());
@@ -85,20 +85,20 @@ void TokenStream::update(double dt) {
   scrollManager.update(dt);
 }
 
-void TokenStream::draw(love::graphics::Graphics* g) {
+void TokenStream::draw(love::graphics::Graphics* g, int xScissorOffset) {
   auto scrollOffset = getScrollOffset();
 
   for (auto* token : tokens) {
     g->setScissor({
-                      (int) position.x, (int) position.y,
+                      (int) position.x + xScissorOffset, (int) position.y,
                       (int) frameSize.x, (int) frameSize.y
                   });
-    token->draw(g, scrollOffset + position + padding + token->position);
+    token->draw(g, scrollOffset + position + padding + token->position, xScissorOffset);
   }
   g->setScissor();
 
   if (tokenInFlightPosition.isActive()) {
-    tokenInFlight->draw(g, tokenInFlightPosition.get());
+    tokenInFlight->draw(g, tokenInFlightPosition.get(), xScissorOffset);
   }
 }
 

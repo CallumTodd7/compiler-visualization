@@ -43,6 +43,8 @@ private:
   love::graphics::Font* fontSourceCodeProRegular20 = nullptr;
 
   Data::Mode state = Data::Mode::START;
+  Tween<float> horizontalOffset = Tween<float>(0);
+  bool hasLexerSupport = false;
 
   float titleHeight = 0;
   Text* txtTitle = nullptr;

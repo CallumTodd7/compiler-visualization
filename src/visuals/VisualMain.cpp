@@ -179,11 +179,19 @@ void VisualMain::setupNewMode(const Data& data) {
       break;
     case Data::PARSER:
       txtTitle->set(buildColoredString("Parsing", g));
-      txtLexerCurrentPos.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      hasLexerSupport = true;
+      horizontalOffset
+          .startAtCurrent({})
+          .goTo(horizontalOffset.get() - tokenStream.position.x, 4)
+          .callback([&] {
+            hasLexerSupport = false;
+          })
+          .wait(1.0)
+          .finish();
       break;
     case Data::CODE_GEN:
       txtTitle->set(buildColoredString("Code Generation", g));
-      txtLexerCurrentPos.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
       break;
     case Data::FINISHED:
       txtTitle->set(buildColoredString("Done!", g));
@@ -304,20 +312,28 @@ void VisualMain::update(double dt) {
     requestNextData();
   }
 
-  if (!shouldShowAllChecklistHighlighting) {
-    auto yPos = txtLexerCurrentPos.get().y;
-    lexerChecklist.highlightUntilYPos = fmax(0, yPos);
-  } else {
-    lexerChecklist.highlightUntilYPos = -1;
+  if (state == Data::Mode::LEXER) {
+    if (!shouldShowAllChecklistHighlighting) {
+      auto yPos = txtLexerCurrentPos.get().y;
+      lexerChecklist.highlightUntilYPos = fmax(0, yPos);
+    } else {
+      lexerChecklist.highlightUntilYPos = -1;
+    }
+
+    sourceCode.update(dt);
+    txtLexerCurrentPos.update(dt);
   }
 
-  sourceCode.update(dt);
-  tokenStream.update(dt);
-  txtLexerCurrentPos.update(dt);
+  if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
+    tokenStream.update(dt);
+  }
+
+  horizontalOffset.update(dt);
 
   activeAnimations = sourceCode.hasActiveAnimations()
       || tokenStream.hasActiveAnimations()
-      || txtLexerCurrentPos.isActive();
+      || txtLexerCurrentPos.isActive()
+      || horizontalOffset.isActive();
 }
 
 void VisualMain::draw() {
@@ -336,9 +352,13 @@ void VisualMain::draw() {
     g->polyline(&lineVerts[0], lineVerts.size());
   }
 
-  if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
+  // Horizontal translation
+  g->translate(horizontalOffset.get(), 0);
+  int xScissorOffset = horizontalOffset.get();
+
+  if (state == Data::Mode::LEXER || hasLexerSupport) {
     // Left: source code
-    sourceCode.draw(g);
+    sourceCode.draw(g, xScissorOffset);
 
     // Separator
     {
@@ -351,7 +371,7 @@ void VisualMain::draw() {
 
     // Middle: checklist
     g->setScissor({
-                      (int) lexerChecklist.position.x, (int) lexerChecklist.position.y,
+                      (int) lexerChecklist.position.x + xScissorOffset, (int) lexerChecklist.position.y,
                       (int) lexerChecklist.position.x, (int) ((float) g->getHeight() - lexerChecklist.position.y)
                   });
     lexerChecklist.draw(g);
@@ -366,7 +386,7 @@ void VisualMain::draw() {
       }
       highlightRect.x = lexerChecklist.getCursorPosition().x;
       highlightRect.y = cursorPos.y - ((float) txtLexerCurrent->getHeight() / 2);
-      Matrix4 cursorMat = g->getTransform();
+      Matrix4 cursorMat;
       cursorMat.translate(highlightRect.x, highlightRect.y);
 
       auto origCol = g->getColor();
@@ -384,7 +404,7 @@ void VisualMain::draw() {
 
       if (shouldScissorLexerCurrent) {
         g->intersectScissor({
-                                (int) highlightRect.x, (int) highlightRect.y,
+                                (int) highlightRect.x + xScissorOffset, (int) highlightRect.y,
                                 (int) highlightRect.z, (int) highlightRect.w
                             });
       }
@@ -400,8 +420,10 @@ void VisualMain::draw() {
       };
       g->polyline(&lineVerts[0], lineVerts.size());
     }
+  }
 
+  if (state == Data::Mode::LEXER || state == Data::Mode::PARSER) {
     // Right: token stream
-    tokenStream.draw(g);
+    tokenStream.draw(g, xScissorOffset);
   }
 }
