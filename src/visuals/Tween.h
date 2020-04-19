@@ -128,7 +128,8 @@ public:
 
     currentTime += dt;
     if (!stages[currentStage].isWait) {
-      _update((currentTime - pastStageTime) / stages[currentStage].duration,
+      double t = (currentTime - pastStageTime) / stages[currentStage].duration;
+      _update(clamp(t),
               stages[currentStage - 1].dest,
               stages[currentStage].dest);
     }
@@ -169,6 +170,11 @@ private:
     a *= (float)(1 - t);
     b *= (float)t;
     return a + b;
+  }
+  double clamp(double x) {
+    if (x < 0) return 0;
+    if (x > 1) return 1;
+    return x;
   }
 
 };

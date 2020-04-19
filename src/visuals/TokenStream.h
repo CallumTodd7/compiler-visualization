@@ -11,6 +11,7 @@
 #include <common/Vector.h>
 #include <modules/graphics/Graphics.h>
 #include "Tween.h"
+#include "ScrollManager.h"
 
 class VisualToken {
 private:
@@ -35,11 +36,14 @@ private:
   VisualToken* tokenInFlight;
   Tween<love::Vector2> tokenInFlightPosition;
 
+  ScrollManager scrollManager;
+
 public:
   static float tokenWidth;
   static float tokenPadding;
 
   love::Vector2 position = {0, 0};
+  love::Vector2 frameSize = {0, 0};
   love::Vector2 padding = {0, 0};
 
   love::graphics::Font* tokenTypeFont = nullptr;
@@ -56,9 +60,15 @@ public:
   bool hasActiveAnimations();
 
 private:
-  love::Vector2 getNextPosition() {
-    return {0, (50.0f + 10.0f) * tokens.size()};
+  love::Vector2 getTheoreticalPositionOf(unsigned int index) {
+    return {0, (60.0f) * (float) index};
   }
+
+  love::Vector2 getNextPosition() {
+    return getTheoreticalPositionOf(tokens.size());
+  }
+
+  love::Vector2 getScrollOffset();
 
 };
 

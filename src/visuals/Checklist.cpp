@@ -117,9 +117,6 @@ void Checklist::draw(Graphics* g) {
           g->setColor(love::Colorf(1, 0, 0, 1));
           break;
         case PROGRESS:
-          g->setColor(love::Colorf(187 / 255.0f, 186 / 255.0f, 38 / 255.f, 1));
-//        g->rectangle(Graphics::DrawMode::DRAW_FILL, position.x + textXOffset, yPos, item.size.x, item.size.y);
-          g->setColor(origCol);
           break;
         case ACCEPTED:
           g->setColor(love::Colorf(0, 1, 0, 1));

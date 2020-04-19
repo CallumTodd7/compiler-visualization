@@ -124,25 +124,30 @@ void VisualMain::init() {
   g->setActive(true);
   window->requestAttention(false);
 
-  fontVeraRegular18 = genFont<VeraFontData>(18, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
+  fontVeraRegular18 = genFont<VeraFontData>(19, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
   fontSourceCodeProRegular20 = genFont<SourceCodeProFontData>(20, TrueTypeRasterizer::Hinting::HINTING_NORMAL);
   g->setFont(fontSourceCodeProRegular20);
 
-  titleHeight = g->getFont()->getHeight() + 20;
+  titleHeight = fontVeraRegular18->getHeight() + 20;
 
   txtTitle = g->newText(fontVeraRegular18, buildColoredString("Press [SPACE] to start", g));
   txtLexerCurrent = g->newText(g->getFont());
 
-  tokenStream.padding = {10, 0};
-  tokenStream.position = {(float) g->getWidth() - TokenStream::tokenWidth - tokenStream.padding.x * 2, titleHeight};
+  tokenStream.padding = {10, 10};
+  tokenStream.frameSize = {
+      TokenStream::tokenWidth + tokenStream.padding.x * 2,
+      (float) g->getHeight() - titleHeight - tokenStream.padding.y
+  };
+  tokenStream.position = {(float) g->getWidth() - tokenStream.frameSize.x, titleHeight};
   tokenStream.tokenTypeFont = fontSourceCodeProRegular20;
   tokenStream.valueFont = fontSourceCodeProRegular20;
 
   sourceCode.init(g);
-  sourceCode.position.x = 10;
-  sourceCode.position.y = titleHeight;
+  sourceCode.position = {0, titleHeight};
+  sourceCode.padding = {10, 5};
+  sourceCode.frameSize = love::Vector2(tokenStream.position.x / 2, (float) g->getHeight()) - sourceCode.position;
 
-  lexerChecklist.position = {tokenStream.position.x / 2, titleHeight};
+  lexerChecklist.position = {tokenStream.position.x / 2, titleHeight + 15};
   lexerChecklist.alignment = Alignment::RIGHT;
   lexerChecklist.enableCursor = false;
   lexerChecklist.cursorPadding = 20;
@@ -276,10 +281,8 @@ void VisualMain::handleLexerData(const Data& data) {
     moveToPos(6);
   } else if (data.lexerState == Data::LexerState::END_OP) {
     lexerChecklist.accept(6, true);
-    moveToPos(0, 0.5, [&] {
-      tokenStream.add(lexerChecklist.getCursorPosition(false), data.tokenType);
-      isLexerCurrentVisible = false;
-    });
+    tokenStream.add(lexerChecklist.getCursorPosition(false), data.tokenType);
+    isLexerCurrentVisible = false;
   } else if (data.lexerState == Data::LexerState::UNKNOWN) {
     lexerChecklist.accept(7, true);
     moveToPos(7);
@@ -318,15 +321,17 @@ void VisualMain::update(double dt) {
 }
 
 void VisualMain::draw() {
-  Matrix4 mat = g->getTransform();
-  mat.translate(10, 5);
-  txtTitle->draw(g, mat);
+  {
+    Matrix4 mat = g->getTransform();
+    mat.translate(10, 10);
+    txtTitle->draw(g, mat);
+  }
 
   // Separator
   {
     std::vector<Vector2> lineVerts = {
-        {0,                     titleHeight - 10},
-        {(float) g->getWidth(), titleHeight - 10},
+        {0,                     titleHeight - (g->getLineWidth() / 2)},
+        {(float) g->getWidth(), titleHeight - (g->getLineWidth() / 2)},
     };
     g->polyline(&lineVerts[0], lineVerts.size());
   }
@@ -338,13 +343,17 @@ void VisualMain::draw() {
     // Separator
     {
       std::vector<Vector2> lineVerts = {
-          {lexerChecklist.position.x, titleHeight - 10},
+          {lexerChecklist.position.x, titleHeight},
           {lexerChecklist.position.x, (float) g->getHeight()},
       };
       g->polyline(&lineVerts[0], lineVerts.size());
     }
 
     // Middle: checklist
+    g->setScissor({
+                      (int) lexerChecklist.position.x, (int) lexerChecklist.position.y,
+                      (int) lexerChecklist.position.x, (int) ((float) g->getHeight() - lexerChecklist.position.y)
+                  });
     lexerChecklist.draw(g);
 
     if (isLexerCurrentVisible) {
@@ -374,19 +383,19 @@ void VisualMain::draw() {
       g->setColor(origCol);
 
       if (shouldScissorLexerCurrent) {
-        g->setScissor({
-                          (int) highlightRect.x, (int) highlightRect.y,
-                          (int) highlightRect.z, (int) highlightRect.w
-                      });
+        g->intersectScissor({
+                                (int) highlightRect.x, (int) highlightRect.y,
+                                (int) highlightRect.z, (int) highlightRect.w
+                            });
       }
       txtLexerCurrent->draw(g, cursorMat);
-      g->setScissor();
     }
+    g->setScissor();
 
     // Separator
     {
       std::vector<Vector2> lineVerts = {
-          {tokenStream.position.x, titleHeight - 10},
+          {tokenStream.position.x, titleHeight},
           {tokenStream.position.x, (float) g->getHeight()},
       };
       g->polyline(&lineVerts[0], lineVerts.size());

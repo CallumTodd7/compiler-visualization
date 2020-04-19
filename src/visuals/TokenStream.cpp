@@ -2,7 +2,6 @@
 // Created by Callum Todd on 2020/04/18.
 //
 
-#include <iostream>
 #include "TokenStream.h"
 #include "love2dHelper.h"
 
@@ -45,11 +44,16 @@ void VisualToken::draw(love::graphics::Graphics* g, const love::Vector2& pos) {
                pos.x, pos.y,
                TokenStream::tokenWidth, tokenHeight);
 
+  g->intersectScissor({
+                          (int) pos.x, (int) pos.y,
+                          (int) TokenStream::tokenWidth, (int) tokenHeight
+                      });
   auto mat = g->getTransform();
   mat.translate(pos.x + TokenStream::tokenPadding, pos.y + TokenStream::tokenPadding);
   txtType->draw(g, mat);
   mat.translate(0, g->getFont()->getHeight());
   txtValue->draw(g, mat);
+  g->setScissor();
 }
 
 TokenStream::~TokenStream() {
@@ -63,10 +67,12 @@ void TokenStream::add(const love::Vector2& startPosition, const std::string& tok
 
   tokenInFlight = new VisualToken(tokenType, value, endPosition, tokenTypeFont, valueFont);
 
+  auto scrollOffset = getScrollOffset();
+
   tokenInFlightPosition
       .startAt(startPosition, false)
       .wait(0.5)
-      .goTo(position + padding + endPosition, 1.5)
+      .goTo(scrollOffset + position + padding + endPosition, 1.5)
       .wait(0.5)
       .callback([&] {
         tokens.push_back(tokenInFlight);
@@ -76,12 +82,21 @@ void TokenStream::add(const love::Vector2& startPosition, const std::string& tok
 
 void TokenStream::update(double dt) {
   tokenInFlightPosition.update(dt);
+  scrollManager.update(dt);
 }
 
 void TokenStream::draw(love::graphics::Graphics* g) {
+  auto scrollOffset = getScrollOffset();
+
   for (auto* token : tokens) {
-    token->draw(g, position + padding + token->position);
+    g->setScissor({
+                      (int) position.x, (int) position.y,
+                      (int) frameSize.x, (int) frameSize.y
+                  });
+    token->draw(g, scrollOffset + position + padding + token->position);
   }
+  g->setScissor();
+
   if (tokenInFlightPosition.isActive()) {
     tokenInFlight->draw(g, tokenInFlightPosition.get());
   }
@@ -90,3 +105,9 @@ void TokenStream::draw(love::graphics::Graphics* g) {
 bool TokenStream::hasActiveAnimations() {
   return tokenInFlightPosition.isActive();
 }
+
+love::Vector2 TokenStream::getScrollOffset() {
+  auto contentSize = getTheoreticalPositionOf(tokens.size() + 1);
+  return scrollManager.getOffset(frameSize, contentSize, contentSize);
+}
+

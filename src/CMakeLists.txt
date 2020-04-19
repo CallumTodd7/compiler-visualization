@@ -14,4 +14,5 @@ add_executable(cv
     visuals/HighlightableText.cpp visuals/HighlightableText.h
     visuals/Checklist.cpp visuals/Checklist.h
     visuals/Tween.cpp visuals/Tween.h
-    visuals/TokenStream.cpp visuals/TokenStream.h)
+    visuals/TokenStream.cpp visuals/TokenStream.h
+    visuals/ScrollManager.h)

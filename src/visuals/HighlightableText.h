@@ -11,16 +11,21 @@
 #include <modules/graphics/Text.h>
 #include <modules/graphics/Font.h>
 #include "Tween.h"
+#include "ScrollManager.h"
 
 using love::graphics::opengl::Graphics;
 
 class HighlightableText {
 public:
   love::Vector2 position;
+  love::Vector2 padding;
+  love::Vector2 frameSize;
 
 private:
   std::vector<love::graphics::Font::ColoredString> textStrings;
   love::graphics::Text* text = nullptr;
+
+  love::Vector2 contentSize;
 
   love::graphics::Font* font = nullptr;
   love::Colorf colour;
@@ -36,6 +41,9 @@ private:
   bool showPeekHighlight = false;
   Tween<love::Vector4> peekHighlightRect;
   love::Colorf peekHighlightColour = love::Colorf(187 / 255.0f, 38 / 255.0f, 186 / 255.0f, 1);
+
+  ScrollManager scrollManager;
+  love::Vector2 lastFocusRect;
 
 public:
   void load(const std::string& filepath);
@@ -59,6 +67,9 @@ public:
   love::Vector4 getPeekHighlightRect() {
     return peekHighlightRect.get();
   }
+
+private:
+  love::Vector2 getScrollOffset();
 
 };
 

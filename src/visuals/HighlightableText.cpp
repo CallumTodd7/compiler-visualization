@@ -13,11 +13,18 @@ void HighlightableText::init(Graphics* g) {
 }
 
 void HighlightableText::load(const std::string& filepath) {
-  std::ifstream filestream(filepath);
+  std::ifstream fileStream(filepath);
   std::string line;
-  while (std::getline(filestream, line)) {
+  while (std::getline(fileStream, line)) {
     textStrings.push_back(love::graphics::Font::ColoredString({line + '\n', colour}));
+    // `+ "--"` to add extra blank space at end of content width
+    float width = (float) font->getWidth(line + "--");
+    if (width > contentSize.x) {
+      contentSize.x = width;
+    }
   }
+  // `+ 1` to add extra blank line at end of content height
+  contentSize.y = (float) (textStrings.size() + 1) * (font->getHeight() * font->getLineHeight());
 
   text->set(textStrings);
 }
@@ -25,11 +32,13 @@ void HighlightableText::load(const std::string& filepath) {
 void HighlightableText::update(double dt) {
   highlightRect.update(dt);
   peekHighlightRect.update(dt);
+  scrollManager.update(dt);
 }
 
 void HighlightableText::draw(Graphics* g) {
   love::Matrix4 mat = g->getTransform();
-  mat.translate(position.x, position.y);
+  auto scrollOffset = getScrollOffset();
+  mat.translate(position.x + padding.x + scrollOffset.x, position.y + padding.y + scrollOffset.y);
 
   if (text) {
     if (showHighlight || showPeekHighlight) {
@@ -38,19 +47,25 @@ void HighlightableText::draw(Graphics* g) {
         g->setColor(peekHighlightColour);
         auto rect = peekHighlightRect.get();
         g->rectangle(Graphics::DrawMode::DRAW_FILL,
-                     position.x + rect.x, position.y + rect.y,
+                     position.x + padding.x + scrollOffset.x + rect.x, position.y + padding.y + scrollOffset.y + rect.y,
                      rect.z, rect.w);
       }
       if (showHighlight) {
         g->setColor(highlightColour);
         auto rect = highlightRect.get();
         g->rectangle(Graphics::DrawMode::DRAW_FILL,
-                     position.x + rect.x, position.y + rect.y,
+                     position.x + padding.x + scrollOffset.x + rect.x, position.y + padding.y + scrollOffset.y + rect.y,
                      rect.z, rect.w);
       }
       g->pop();
     }
+
+    g->setScissor({
+                      (int) position.x, (int) position.y,
+                      (int) frameSize.x, (int) frameSize.y
+                  });
     text->draw(g, mat);
+    g->setScissor();
   }
 }
 
@@ -75,6 +90,7 @@ void HighlightableText::highlightPeek(int startLine, int startPos, int endLine, 
         .goTo(b, 0.5)
         .wait(0.5)
         .finish();
+    lastFocusRect = {b.x + b.z, b.y + font->getHeight() * 2};
 
     showPeekHighlight = true;
     showHighlight = false;
@@ -100,6 +116,7 @@ void HighlightableText::highlight(int startLine, int startPos, int endLine, int 
         .goTo(b, 0.5)
         .wait(0.5)
         .finish();
+    lastFocusRect = {b.x + b.z, b.y + font->getHeight() * 2};
 
     showHighlight = true;
   } catch (std::out_of_range&) {}
@@ -114,5 +131,12 @@ void HighlightableText::unhighlightPeek() {
   peekHighlightRect
       .startAtCurrent({})
       .goTo(rect, 0.5)
+      .callback([&] {
+        showPeekHighlight = false;
+      })
       .finish();
+}
+
+love::Vector2 HighlightableText::getScrollOffset() {
+  return scrollManager.getOffset(frameSize - padding, contentSize, lastFocusRect);
 }
