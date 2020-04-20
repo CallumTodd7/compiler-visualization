@@ -455,7 +455,15 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
     });
 
     // Write tail
-    *file->fileStream << "ret\n";
+    if (node->ident == "main") {
+      comment("BEGIN main exit boilerplate");
+      *file->fileStream << "mov rax, 1\n"
+                        << "xor rdi, rdi\n"
+                        << "syscall\n";
+      comment("END main exit boilerplate");
+    } else {
+      *file->fileStream << "ret\n";
+    }
 
     // Remove params from internal map
     for (auto* loc : parameterLocations) {

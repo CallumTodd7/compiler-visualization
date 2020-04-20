@@ -16,8 +16,12 @@ cd ../bin
 
 for f in "${FILES[@]}"; do
 	echo -e "\n${INFO}### Running $f...${RESET}"
-  ./cv -i $f -o $f.o
+  ./cv --no-ui -i $f -o ../ubuntu_data/output.asm
   status=$?
+  if [ $status -eq 0 ]; then
+    docker run -it --rm -v $PWD/../ubuntu_data:/home/work cv_ubuntu /home/work/build.sh
+    status=$?
+  fi
   OUTPUT+=($status)
   if [ $status -eq 0 ]; then
     echo -e "${INFO}# ${PASS}PASS${RESET}"
