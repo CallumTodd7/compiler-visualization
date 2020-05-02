@@ -76,34 +76,41 @@ VisualMain::~VisualMain() {
 }
 
 void VisualMain::requestNextData() {
-  threadSync->getData([&](const Data& data) {
-//    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
-    switch (data.type) {
-      case Data::Type::NOOP:
-        break;
-      case Data::Type::MODE_CHANGE:
-        setupNewMode(data);
-        break;
-      case Data::Type::SPECIFIC:
-        switch (data.mode) {
-          case Data::START:
-            break;
-          case Data::LEXER:
-            handleLexerData(data);
-            break;
-          case Data::PARSER:
-            handleParserData(data);
-            break;
-          case Data::CODE_GEN:
-            handleCodeGenData(data);
-            break;
-          case Data::FINISHED:
-            // Finished here
-            break;
-        }
-        break;
-    }
-  });
+  do {
+    threadSync->getData([&](const Data& data) {
+      //    std::cout << "Data - type: " << data.type << ", mode: " << data.mode << std::endl;
+      switch (data.type) {
+        case Data::Type::NOOP:
+          break;
+        case Data::Type::MODE_CHANGE:
+          shouldSkipToNextSection = false;
+          tweenNoAnimate = false;
+
+          setupNewMode(data);
+          break;
+        case Data::Type::SPECIFIC:
+          switch (data.mode) {
+            case Data::START:
+              break;
+            case Data::LEXER:
+              handleLexerData(data);
+              break;
+            case Data::PARSER:
+              handleParserData(data);
+              break;
+            case Data::CODE_GEN:
+              handleCodeGenData(data);
+              break;
+            case Data::FINISHED:
+              // Finished here
+              break;
+          }
+          break;
+      }
+    });
+  } while (threadSync->isDataQueued() && shouldSkipToNextSection);
+
+  tweenNoAnimate = false;
 }
 
 template<typename FontData>
@@ -153,16 +160,16 @@ void VisualMain::init() {
   lexerChecklist.cursorPadding = 20;
   auto charWidth = (float) g->getFont()->getWidth('0');
   lexerChecklist.cursorWidth = charWidth;
-  lexerChecklist.indentSize = charWidth * 2;
+  lexerChecklist.indentSize = charWidth;
 
   auto origFont = g->getFont();
   g->setFont(fontVeraRegular18);
   lexerChecklist.add(g, "End of file");
-  lexerChecklist.add(g, "Digit");
-  lexerChecklist.add(g, "String");
-  auto alphaId = lexerChecklist.add(g, "Alpha");
-  lexerChecklist.add(g, "Keyword", alphaId);
-  lexerChecklist.add(g, "Identifier", alphaId);
+  lexerChecklist.add(g, "Number");
+  lexerChecklist.add(g, "String literal");
+  auto alphaId = lexerChecklist.add(g, "Alphabetic character");
+  lexerChecklist.add(g, "Keyword -", alphaId);
+  lexerChecklist.add(g, "Identifier -", alphaId);
   lexerChecklist.add(g, "Operator");
   lexerChecklist.add(g, "Error: Unknown token");
   g->setFont(origFont);
@@ -186,7 +193,11 @@ void VisualMain::setupNewMode(const Data& data) {
           .callback([&] {
             hasLexerSupport = false;
           })
-          .wait(1.0)
+          .wait(100.0)
+          .finish();
+      tokenStream.verticalFocusPoint
+          .startAtCurrent(0.0)
+          .goTo(0.0, 3)
           .finish();
       break;
     case Data::CODE_GEN:
@@ -426,4 +437,50 @@ void VisualMain::draw() {
     // Right: token stream
     tokenStream.draw(g, xScissorOffset);
   }
+
+  if (state == Data::Mode::PARSER) {
+    // Separator
+    {
+      std::vector<Vector2> lineVerts = {
+          {(float) g->getWidth(), titleHeight},
+          {(float) g->getWidth(), (float) g->getHeight()},
+      };
+      g->polyline(&lineVerts[0], lineVerts.size());
+    }
+
+
+  }
+}
+
+void VisualMain::skipToNextSection() {
+  // Disable all animations
+  tweenNoAnimate = true;
+
+  // Do one update cycle to force current animations to end.
+  // HACK: temp set `activeAnimations` = true to ensure
+  //     `requestNextData` doesn't get called before animations are flushed.
+  bool activeAnimationsBak = activeAnimations;
+  activeAnimations = true;
+  update(0);
+  activeAnimations = activeAnimationsBak;
+
+  // Request next data (also re-enables animations) until next section is reached
+  shouldSkipToNextSection = true;
+  requestNextData();
+}
+
+void VisualMain::skipForwardOneStep() {
+  // Disable all animations
+  tweenNoAnimate = true;
+
+  // Do one update cycle to force current animations to end.
+  // HACK: temp set `activeAnimations` = true to ensure
+  //     `requestNextData` doesn't get called before animations are flushed.
+  bool activeAnimationsBak = activeAnimations;
+  activeAnimations = true;
+  update(0);
+  activeAnimations = activeAnimationsBak;
+
+  // Request next data (also re-enables animations)
+  requestNextData();
 }

@@ -56,16 +56,11 @@ void VisualToken::draw(love::graphics::Graphics* g, const love::Vector2& pos, in
   g->setScissor();
 }
 
-TokenStream::~TokenStream() {
-  for (auto token : tokens) {
-    delete token;
-  }
-}
-
 void TokenStream::add(const love::Vector2& startPosition, const std::string& tokenType, const std::string& value) {
   love::Vector2 endPosition = getNextPosition();
 
-  tokenInFlight = new VisualToken(tokenType, value, endPosition, tokenTypeFont, valueFont);
+  auto tokenInFlight = new VisualToken(tokenType, value, endPosition, tokenTypeFont, valueFont);
+  tokens.push_back(tokenInFlight);
 
   auto scrollOffset = getScrollOffset();
 
@@ -73,41 +68,44 @@ void TokenStream::add(const love::Vector2& startPosition, const std::string& tok
       .startAt(startPosition, false)
       .wait(0.5)
       .goTo(scrollOffset + position + padding + endPosition, 1.5)
-      .wait(0.5)
-      .callback([&] {
-        tokens.push_back(tokenInFlight);
-      })
       .finish();
 }
 
 void TokenStream::update(double dt) {
   tokenInFlightPosition.update(dt);
+  verticalFocusPoint.update(dt);
   scrollManager.update(dt);
 }
 
 void TokenStream::draw(love::graphics::Graphics* g, int xScissorOffset) {
   auto scrollOffset = getScrollOffset();
 
-  for (auto* token : tokens) {
-    g->setScissor({
-                      (int) position.x + xScissorOffset, (int) position.y,
-                      (int) frameSize.x, (int) frameSize.y
-                  });
-    token->draw(g, scrollOffset + position + padding + token->position, xScissorOffset);
+  for (size_t i = 0; i < tokens.size(); ++i) {
+    if (i == tokens.size() - 1 && tokenInFlightPosition.isActive()) {
+      g->setScissor();
+      tokens[0]->draw(g, tokenInFlightPosition.get(), xScissorOffset);
+    } else {
+      g->setScissor({
+                        (int) position.x + xScissorOffset, (int) position.y,
+                        (int) frameSize.x, (int) frameSize.y
+                    });
+      tokens[i]->draw(g, scrollOffset + position + padding + tokens[i]->position, xScissorOffset);
+    }
   }
   g->setScissor();
-
-  if (tokenInFlightPosition.isActive()) {
-    tokenInFlight->draw(g, tokenInFlightPosition.get(), xScissorOffset);
-  }
 }
 
 bool TokenStream::hasActiveAnimations() {
-  return tokenInFlightPosition.isActive();
+  return tokenInFlightPosition.isActive()
+      && verticalFocusPoint.isActive();
 }
 
 love::Vector2 TokenStream::getScrollOffset() {
   auto contentSize = getTheoreticalPositionOf(tokens.size() + 1);
-  return scrollManager.getOffset(frameSize, contentSize, contentSize);
+  love::Vector2 focusPoint = {
+      0,
+      contentSize.y * verticalFocusPoint.get()
+  };
+  return scrollManager.getOffset(frameSize, contentSize, focusPoint);
 }
 

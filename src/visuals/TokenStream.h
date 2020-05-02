@@ -33,7 +33,6 @@ class TokenStream {
 private:
   std::vector<VisualToken*> tokens;
 
-  VisualToken* tokenInFlight;
   Tween<love::Vector2> tokenInFlightPosition;
 
   ScrollManager scrollManager;
@@ -41,6 +40,8 @@ private:
 public:
   static float tokenWidth;
   static float tokenPadding;
+
+  Tween<float> verticalFocusPoint = Tween<float>(1.0);
 
   love::Vector2 position = {0, 0};
   love::Vector2 frameSize = {0, 0};
@@ -50,8 +51,6 @@ public:
   love::graphics::Font* valueFont = nullptr;
 
 public:
-  ~TokenStream();
-
   void add(const love::Vector2& startPosition, const std::string& tokenType, const std::string& value = "");
 
   void update(double dt);

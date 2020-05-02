@@ -58,6 +58,10 @@ public:
   void join();
   int getWorkerExitCode();
 
+  bool isDataQueued() {
+    return queueData;
+  }
+
 private:
   // Only used when not queued
   void workerReady();

@@ -5,6 +5,8 @@
 #include "Tween.h"
 #include <common/Vector.h>
 
+bool tweenNoAnimate = false;
+
 template<>
 void Tween<float>::_update(double t, float& start, float& end) {
   current = lerp(t, start, end);

@@ -42,6 +42,8 @@ private:
   love::graphics::Font* fontVeraRegular18 = nullptr;
   love::graphics::Font* fontSourceCodeProRegular20 = nullptr;
 
+  bool shouldSkipToNextSection = false;
+
   Data::Mode state = Data::Mode::START;
   Tween<float> horizontalOffset = Tween<float>(0);
   bool hasLexerSupport = false;
@@ -73,6 +75,8 @@ public:
     return g;
   }
 
+  void skipForwardOneStep();
+  void skipToNextSection();
 private:
   void requestNextData();
 

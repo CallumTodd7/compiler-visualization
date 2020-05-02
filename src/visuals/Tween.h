@@ -8,6 +8,8 @@
 #import <vector>
 #import <functional>
 
+extern bool tweenNoAnimate;
+
 template <class T>
 class Tween {
 private:
@@ -77,6 +79,10 @@ private:
       return *this;
     }
     void finish() {
+//      if (tween->isActive()) {
+//        tween->completeEarly(!useExistingCurrent);
+//      }
+
       tween->stages = stages;
       tween->currentStage = 1;
 
@@ -93,6 +99,10 @@ private:
 
       if (tween->stages[0].callback) {
         tween->stages[0].callback();
+      }
+
+      if (tweenNoAnimate) {
+        tween->completeEarly();
       }
 
       // Self destruct
@@ -127,8 +137,32 @@ public:
     active = false;
   }
 
+  void completeEarly(bool setValue = true) {
+    while (currentStage < stages.size()) {
+      if (stages[currentStage].callback) {
+        stages[currentStage].callback();
+      }
+      if (stageCompleteCallback) {
+        stageCompleteCallback();
+      }
+      currentStage++;
+    }
+
+    if (setValue) {
+      current = stages.back().dest;
+    }
+
+    complete = true;
+    stop();
+  }
+
   bool update(double dt) {
     if (!active) return false;
+
+    if (tweenNoAnimate) {
+      completeEarly();
+      return complete;
+    }
 
     currentTime += dt;
     if (!stages[currentStage].isWait) {

@@ -153,6 +153,10 @@ int main(int argc, char* argv[]) {
             } else if (evt.key.keysym.sym == SDLK_0) {
               timeModifier = 1;
               std::cout << "Timer modifier: " << timeModifier << std::endl;
+            } else if (hasCompilerStarted && evt.key.keysym.sym == SDLK_RIGHT) {
+              visuals.skipForwardOneStep();
+            } else if (hasCompilerStarted && evt.key.keysym.sym == SDLK_DOWN) {
+              visuals.skipToNextSection();
             }
             break;
         }
