@@ -1,6 +1,6 @@
 // Gen test
 
-u8 nothingFunc() {
+u8 nothingFunc(u8 str) {
   u8 n = 00121;
 }
 

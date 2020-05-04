@@ -18,6 +18,7 @@
 #include "HighlightableText.h"
 #include "Checklist.h"
 #include "TokenStream.h"
+#include "Tree.h"
 
 using love::graphics::opengl::Shader;
 using love::graphics::ShaderStage;
@@ -62,6 +63,8 @@ private:
   Text* txtLexerCurrent = nullptr;
 
   TokenStream tokenStream;
+
+  Tree tree;
 
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);

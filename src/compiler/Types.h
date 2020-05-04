@@ -12,6 +12,7 @@ enum class DataType {
   U8,
   S8,
 };
+std::ostream& operator<<(std::ostream& os, const DataType& type);
 
 unsigned int bytesOf(DataType type);
 

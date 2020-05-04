@@ -7,6 +7,7 @@
 
 #import <ostream>
 #include "compiler/Lexer.h"
+#include "compiler/AST.h"
 
 struct Data {
   enum Type {
@@ -26,7 +27,7 @@ struct Data {
   friend std::ostream& operator<<(std::ostream& os, const Mode& mode);
 
   enum LexerState {
-    UNINITIALISED = 0,
+    LEXER_UNINITIALISED = 0,
     NEW_TOKEN,
     END_OF_FILE,
     UNKNOWN,
@@ -42,12 +43,34 @@ struct Data {
     WORD_UPDATE,
   };
 
+  enum ParserState {
+    PARSER_UNINITIALISED = 0,
+    START_NODE,
+    END_NODE,
+    PARAM,
+    ADD_CHILD,
+    EXPECT,
+    EXPECT_PASS,
+    EXPECT_FAIL,
+    ACCEPT,
+    ACCEPT_PASS,
+    ACCEPT_FAIL,
+  };
+
   Type type = Type::NOOP;
   Mode mode;
   std::string filepath;
-  LexerState lexerState = LexerState::UNINITIALISED;
+  LexerState lexerState = LexerState::LEXER_UNINITIALISED;
   LexerContext lexerContextStart;
   LexerContext lexerContextEnd;
+
+  ParserState parserState = ParserState::PARSER_UNINITIALISED;
+  ASTType nodeType = ASTType::UNINITIALISED;
+  std::pair<std::string, std::string> param;
+  std::string parserChildGroup;
+  unsigned long index = 0;
+  Token::Type targetToken;
+  ASTType targetNodeType = ASTType::UNINITIALISED;
 
   std::string tokenType;
 

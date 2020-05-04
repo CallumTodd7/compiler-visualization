@@ -15,4 +15,4 @@ add_executable(cv
     visuals/Checklist.cpp visuals/Checklist.h
     visuals/Tween.cpp visuals/Tween.h
     visuals/TokenStream.cpp visuals/TokenStream.h
-    visuals/ScrollManager.h)
+    visuals/ScrollManager.h visuals/Tree.cpp visuals/Tree.h)

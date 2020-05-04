@@ -20,8 +20,9 @@ public:
     scrollOffset.update(dt);
   }
 
-  love::Vector2
-  getOffset(const love::Vector2& frameSize, const love::Vector2& contentSize, const love::Vector2& focusPoint) {
+  love::Vector2 getOffset(const love::Vector2& frameSize,
+                          const love::Vector2& contentSize,
+                          const love::Vector2& focusPoint) {
     love::Vector2 newDesiredOffset = getDesiredOffset(frameSize, contentSize, focusPoint);
 
     if (desiredOffset != newDesiredOffset) {
@@ -60,6 +61,7 @@ private:
                                         const love::Vector2& focusPoint) {
     love::Vector2 desiredFocusPointLocation = {frameSize.x / 3 * 2, frameSize.y / 2};
     return -max(0, min(focusPoint - desiredFocusPointLocation, contentSize - frameSize));
+//    return -max(0, min(focusPoint, contentSize - frameSize));
   }
 
 

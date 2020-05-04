@@ -252,6 +252,23 @@ std::ostream& operator<<(std::ostream& os, const ExpressionOperatorType& opType)
   }
   return os;
 }
+std::ostream& operator<<(std::ostream& os, const DataType& dataType) {
+  switch (dataType) {
+    case DataType::UNINITIALISED:
+      os << "UNINITIALISED";
+      break;
+    case DataType::VOID:
+      os << "VOID";
+      break;
+    case DataType::U8:
+      os << "U8";
+      break;
+    case DataType::S8:
+      os << "S8";
+      break;
+  }
+  return os;
+}
 
 std::ostream& operator<<(std::ostream& os, const Register& reg) {
   switch (reg) {
@@ -374,7 +391,7 @@ void ASTVariableDeclaration::print(std::ostream& os, unsigned int level) const {
   os << "(" << this->ident << ")";
 
   os << "\n";
-  this->initalValueExpression->print(os, ++level);
+  this->initialValueExpression->print(os, ++level);
 }
 
 void ASTVariableAssignment::print(std::ostream& os, unsigned int level) const {

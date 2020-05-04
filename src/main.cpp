@@ -51,7 +51,7 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
       .mode = Data::Mode::PARSER,
   });
 
-  Parser parser(tokenStream);
+  Parser parser(ready, tokenStream);
   ASTBlock* root = nullptr;
   try {
     root = parser.parse();

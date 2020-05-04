@@ -331,7 +331,7 @@ Location* Generator::walkExpression(ASTExpression* node) {
 void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
   comment("BEGIN VariableDeclaration");
 
-  Location* loc = walkExpression(node->initalValueExpression);
+  Location* loc = walkExpression(node->initialValueExpression);
   moveToMem(node->ident, loc, bytesOf(node->dataType));
 
   removeLocation(loc);

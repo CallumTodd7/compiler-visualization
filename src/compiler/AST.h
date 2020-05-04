@@ -76,7 +76,7 @@ struct ASTVariableDeclaration : ASTStatement {
 
   DataType dataType = DataType::UNINITIALISED;
   std::string ident;//TODO replace with atom
-  ASTExpression* initalValueExpression = nullptr;
+  ASTExpression* initialValueExpression = nullptr;
 };
 
 struct ASTVariableAssignment : ASTStatement {

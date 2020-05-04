@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <sstream>
 #include "VisualMain.h"
 #include "love2dShaders.h"
 #include "love2dHelper.h"
@@ -146,7 +147,7 @@ void VisualMain::init() {
       (float) g->getHeight() - titleHeight - tokenStream.padding.y
   };
   tokenStream.position = {(float) g->getWidth() - tokenStream.frameSize.x, titleHeight};
-  tokenStream.tokenTypeFont = fontSourceCodeProRegular20;
+  tokenStream.tokenTypeFont = fontVeraRegular18;
   tokenStream.valueFont = fontSourceCodeProRegular20;
 
   sourceCode.init(g);
@@ -173,6 +174,15 @@ void VisualMain::init() {
   lexerChecklist.add(g, "Operator");
   lexerChecklist.add(g, "Error: Unknown token");
   g->setFont(origFont);
+
+  tree.padding = {0, 10};
+  tree.frameSize = {
+      (float) g->getWidth() - tokenStream.frameSize.x,
+      (float) g->getHeight() - titleHeight - tree.padding.y
+  };
+  tree.position = {(float) g->getWidth(), titleHeight};
+  tree.font = fontVeraRegular18;
+  tree.valueFont = fontSourceCodeProRegular20;
 }
 
 void VisualMain::setupNewMode(const Data& data) {
@@ -193,7 +203,7 @@ void VisualMain::setupNewMode(const Data& data) {
           .callback([&] {
             hasLexerSupport = false;
           })
-          .wait(100.0)
+          .wait(1.0)
           .finish();
       tokenStream.verticalFocusPoint
           .startAtCurrent(0.0)
@@ -309,7 +319,56 @@ void VisualMain::handleLexerData(const Data& data) {
 }
 
 void VisualMain::handleParserData(const Data& data) {
-
+  switch (data.parserState) {
+    case Data::PARSER_UNINITIALISED:
+      std::cout << "Parser - type: " << data.type << ", state: PARSER_UNINITIALISED" << std::endl;
+      break;
+    case Data::START_NODE:
+      std::cout << "Parser - type: " << data.type << ", state: START_NODE, ast: " << data.nodeType << std::endl;
+      tree.setNodeType(g, (std::stringstream() << data.nodeType).str());
+      tree.updateNodes();
+      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      break;
+    case Data::END_NODE:
+      std::cout << "Parser - type: " << data.type << ", state: END_NODE, ast: " << data.nodeType << std::endl;
+      tree.selectParentNode();
+      break;
+    case Data::PARAM:
+      std::cout << "Parser - type: " << data.type << ", state: PARAM, param: {" << data.param.first << ", "
+                << data.param.second << "}" << std::endl;
+      tree.addTagToNode(g, data.param.first, data.param.second);
+      tree.updateNodes();
+      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      break;
+    case Data::ADD_CHILD:
+      std::cout << "Parser - type: " << data.type << ", state: ADD_CHILD, group: " << data.parserChildGroup
+                << std::endl;
+      tree.addNode(g, data.parserChildGroup);
+      if (data.targetNodeType != ASTType::UNINITIALISED) {
+        tree.setNodeType(g, (std::stringstream() << data.targetNodeType).str());
+      }
+      tree.updateNodes();
+      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      break;
+    case Data::EXPECT:
+      std::cout << "Parser - type: " << data.type << ", state: EXPECT, token: " << data.targetToken << std::endl;
+      break;
+    case Data::EXPECT_PASS:
+      std::cout << "Parser - type: " << data.type << ", state: EXPECT_PASS, token: " << data.targetToken << std::endl;
+      break;
+    case Data::EXPECT_FAIL:
+      std::cout << "Parser - type: " << data.type << ", state: EXPECT_FAIL, token: " << data.targetToken << std::endl;
+      break;
+    case Data::ACCEPT:
+      std::cout << "Parser - type: " << data.type << ", state: ACCEPT, token: " << data.targetToken << std::endl;
+      break;
+    case Data::ACCEPT_PASS:
+      std::cout << "Parser - type: " << data.type << ", state: ACCEPT_PASS, token: " << data.targetToken << std::endl;
+      break;
+    case Data::ACCEPT_FAIL:
+      std::cout << "Parser - type: " << data.type << ", state: ACCEPT_FAIL, token: " << data.targetToken << std::endl;
+      break;
+  }
 }
 
 void VisualMain::handleCodeGenData(const Data& data) {
@@ -339,10 +398,15 @@ void VisualMain::update(double dt) {
     tokenStream.update(dt);
   }
 
+  if (state == Data::Mode::PARSER) {
+    tree.update(dt);
+  }
+
   horizontalOffset.update(dt);
 
   activeAnimations = sourceCode.hasActiveAnimations()
       || tokenStream.hasActiveAnimations()
+      || tree.hasActiveAnimations()
       || txtLexerCurrentPos.isActive()
       || horizontalOffset.isActive();
 }
@@ -448,7 +512,7 @@ void VisualMain::draw() {
       g->polyline(&lineVerts[0], lineVerts.size());
     }
 
-
+    tree.draw(g, xScissorOffset);
   }
 }
 

@@ -17,8 +17,10 @@ private:
 
   std::stack<ASTBlock*> blockScopeStack;
 
+  const std::function<void(const Data&)>& ready;
+
 public:
-  explicit Parser(std::vector<Token> tokenStream);
+  explicit Parser(const std::function<void(const Data&)>& ready, std::vector<Token> tokenStream);
 
   ASTBlock* parse();
 
