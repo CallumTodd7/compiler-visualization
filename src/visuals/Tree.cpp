@@ -5,19 +5,41 @@
 #include "Tree.h"
 #include "love2dHelper.h"
 
-love::Colorf nodeChildGroupColors[] = {
-    love::Colorf(1, 0, 0, 1),
-    love::Colorf(0, 1, 0, 1),
-    love::Colorf(0, 0, 1, 1),
-    love::Colorf(1, 1, 0, 1),
-    love::Colorf(1, 0, 1, 1),
-    love::Colorf(0, 1, 1, 1),
+std::pair<love::Colorf, const char*> nodeChildGroupColors[] = {
+    {love::Colorf(1, 0, 0, 1), "red"},
+    {love::Colorf(0, 1, 0, 1), "green"},
+    {love::Colorf(0, 0, 1, 1), "blue"},
+    {love::Colorf(1, 1, 0, 1), "yellow"},
+    {love::Colorf(1, 0, 1, 1), "magenta"},
+    {love::Colorf(0, 1, 1, 1), "cyan"},
 };
 #define NODE_CHILD_GROUP_COLOURS_COUNT 6
 
 #if 0
 #define SCISSOR_AT_NODE
 #endif
+
+float TreeNode::Tag::getWidth() {
+  return (float) (txtTagName->getWidth() + txtSpacer->getWidth() + txtValue->getWidth());
+}
+
+float TreeNode::Tag::getHeight() {
+  if (txtTagName->getHeight() > txtValue->getHeight()) {
+    return (float) txtTagName->getHeight();
+  } else {
+    return (float) txtValue->getHeight();
+  }
+}
+
+void TreeNode::Tag::draw(love::graphics::Graphics* g, love::Matrix4 mat) {
+  txtTagName->draw(g, mat);
+  if (txtValue) {
+    mat.translate((float) txtTagName->getWidth(), 0);
+    txtSpacer->draw(g, mat);
+    mat.translate((float) txtSpacer->getWidth(), 0);
+    txtValue->draw(g, mat);
+  }
+}
 
 TreeNode::TreeNode(love::graphics::Graphics* g, love::graphics::Font* font, love::graphics::Font* valueFont) {
   if (font) {
@@ -34,50 +56,57 @@ TreeNode::TreeNode(love::graphics::Graphics* g, love::graphics::Font* font, love
 
 TreeNode::~TreeNode() {
   for (auto tag : tags) {
-    if (tag.second.first) tag.second.first->release();
-    if (tag.second.second) tag.second.second->release();
+    if (tag.txtTagName) tag.txtTagName->release();
+    if (tag.txtValue) tag.txtValue->release();
   }
 }
 
 bool TreeNode::hasTag(const std::string& tagName) {
-  return tags.count(tagName) > 0;
+  return std::find_if(tags.begin(), tags.end(), [tagName](const Tag& tag) {
+    return tag.tagName == tagName;
+  }) != tags.end();
 }
 
-void TreeNode::addTag(love::graphics::Graphics* g, const std::string& tagName, love::Colorf colour) {
-  tags[tagName] = {
-      g->newText(font, buildColoredString(tagName, colour)),
-      nullptr
-  };
+void TreeNode::addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
+                      const std::string& tagName, const std::string& colourName, love::Colorf colour) {
+  tags.push_back({
+                     tagName,
+                     g->newText(font, buildColoredString(tagName, g)),
+                     spacer,
+                     g->newText(font, buildColoredString(colourName + " children", colour)),
+                 });
 
-  auto textWidth = (float) tags[tagName].first->getWidth() + nodeInnerPadding * 2;
+  auto textWidth = tags.back().getWidth() + nodeInnerPadding * 2;
   if (textWidth > size.x) {
     size.x = textWidth;
   }
-  size.y += font->getHeight();
+  size.y += tags.back().getHeight();
 }
 
-void TreeNode::addTag(love::graphics::Graphics* g, const std::string& tagName, const std::string& value) {
-  tags[tagName] = {
-      g->newText(font, buildColoredString(tagName, g)),
-      g->newText(valueFont, buildColoredString(": " + value, g))
-  };
+void TreeNode::addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
+                      const std::string& tagName, const std::string& value) {
+  tags.push_back({
+                     tagName,
+                     g->newText(font, buildColoredString(tagName, g)),
+                     spacer,
+                     g->newText(valueFont, buildColoredString(value, g))
+                 });
 
-  auto textWidth = (float) (tags[tagName].first->getWidth() + tags[tagName].second->getWidth()) + nodeInnerPadding * 2;
+  auto textWidth = tags.back().getWidth() + nodeInnerPadding * 2;
   if (textWidth > size.x) {
     size.x = textWidth;
   }
-  size.y += (font->getHeight() > valueFont->getHeight() ? font->getHeight() : valueFont->getHeight());
+  size.y += tags.back().getHeight();
 }
 
 void TreeNode::setNodeType(love::graphics::Graphics* g, const std::string& newNodeType) {
   bool isFirst = nodeType == nullptr;
 
-  nodeTypeStr = newNodeType;
   nodeType = g->newText(font, buildColoredString(newNodeType, g));
 
-  auto textWidth = (float) nodeType->getWidth();
+  auto textWidth = (float) nodeType->getWidth() + nodeInnerPadding * 2;
   if (textWidth > size.x) {
-    size.x = textWidth + nodeInnerPadding * 2;
+    size.x = textWidth;
   }
   if (isFirst) {
     size.y += font->getHeight() + nodeTypePadding;
@@ -98,6 +127,8 @@ void TreeNode::draw(love::graphics::Graphics* g,
                     TreeNode* selectedNode,
                     bool drawChildren, unsigned int level) {
   love::Vector2 pos = offset + position;
+
+  pos.x += (collectiveRowSize.x - size.x) / 2;
 
   auto origCol = g->getColor();
   g->setColor(g->getBackgroundColor());
@@ -127,12 +158,7 @@ void TreeNode::draw(love::graphics::Graphics* g,
     mat.translate(0, font->getHeight() + nodeTypePadding);
   }
   for (auto tag : tags) {
-    tag.second.first->draw(g, mat);
-    if (tag.second.second) {
-      love::Matrix4 mat2 = mat;
-      mat2.translate((float) tag.second.first->getWidth(), 0);
-      tag.second.second->draw(g, mat2);
-    }
+    tag.draw(g, mat);
     mat.translate(0, font->getHeight());
   }
 
@@ -143,25 +169,27 @@ void TreeNode::draw(love::graphics::Graphics* g,
     off += 10;
   }
   g->rectangle(love::graphics::Graphics::DRAW_LINE, pos.x, pos.y, collectiveRowSize.x, collectiveRowSize.y);
+  if (_root == nullptr) {
+    g->rectangle(love::graphics::Graphics::DRAW_LINE, offset.x + position.x, pos.y, _rootMaxContentSize.x, _rootMaxContentSize.y);
+  }
 #endif
-//  g->rectangle(love::graphics::Graphics::DRAW_LINE, pos.x, pos.y, collectiveContentSize.x, collectiveContentSize.y);
 
   if (drawChildren) {
     level++;
-    for (size_t i = 0; i < _children.size(); i++) {
-      auto child = _children[i];
+    for (auto child : _children) {
+      auto childNode = child.first;
+      auto connectionColour = child.second;
       {
-        auto origCol = g->getColor();
-        g->setColor(nodeChildGroupColors[i % NODE_CHILD_GROUP_COLOURS_COUNT]);
+        g->setColor(connectionColour);
         std::vector<love::Vector2> lineVerts = {
-            {pos.x + (size.x / 2), pos.y + size.y},
-            {offset.x + child->position.x + (child->size.x / 2), offset.y + child->position.y},
+            {pos.x + (size.x / 2),                                                    pos.y + size.y},
+            {offset.x + childNode->position.x + (childNode->collectiveRowSize.x / 2), offset.y + childNode->position.y},
         };
         g->polyline(&lineVerts[0], lineVerts.size());
         g->setColor(origCol);
       }
 
-      child->draw(g, offset, scissorWindow, xScissorOffset, selectedNode, true, level);
+      childNode->draw(g, offset, scissorWindow, xScissorOffset, selectedNode, true, level);
     }
   }
 }
@@ -169,56 +197,78 @@ void TreeNode::draw(love::graphics::Graphics* g,
 void TreeNode::_recalculateCollectiveSize() {
   if (_children.empty()) {
     collectiveRowSize = size;
-    collectiveContentSize = size;
   } else {
     float childrenWidth = 0;
     float maxCollectiveContentHeight = 0;
     float maxChildHeight = 0;
 
     for (auto child : _children) {
-      child->_recalculateCollectiveSize();
+      auto childNode = child.first;
+      childNode->_recalculateCollectiveSize();
 
-      childrenWidth += child->collectiveRowSize.x;
+      childrenWidth += childNode->collectiveRowSize.x;
 
-      if (child->size.y > maxChildHeight) {
-        maxChildHeight = child->size.y;
-      }
-      if (child->collectiveContentSize.y > maxCollectiveContentHeight) {
-        maxCollectiveContentHeight = child->collectiveContentSize.y;
+      if (childNode->size.y > maxChildHeight) {
+        maxChildHeight = childNode->size.y;
       }
     }
     for (auto child : _children) {
-      child->collectiveRowSize.y = maxChildHeight;
+      auto childNode = child.first;
+      childNode->collectiveRowSize.y = maxChildHeight;
     }
 
     auto numberOfGaps = _children.size() - 1;
     childrenWidth += nodePaddingX * (float) numberOfGaps;
 
     collectiveRowSize = {childrenWidth > size.x ? childrenWidth : size.x, size.y};
-    collectiveContentSize = {
-        collectiveRowSize.x,
-        maxCollectiveContentHeight + size.y + nodePaddingY
-    };
   }
 }
 
 void TreeNode::_updatePosition(love::Vector2 pos) {
+  // Update `_rootMaxContentSize`
+  // Note: added to this func as a @hack. Should be in `_recalculateCollectiveSize`.
+  if (!_root) {
+    _rootMaxContentSize = size;
+  }
+
   position = pos;
 
   pos.y += collectiveRowSize.y + nodePaddingY;
   for (auto child : _children) {
-    child->_updatePosition(pos);
-    pos.x += child->collectiveRowSize.x + nodePaddingX;
+    auto childNode = child.first;
+
+    childNode->_updatePosition(pos);
+    pos.x += childNode->collectiveRowSize.x + nodePaddingX;
+  }
+
+  // Update `_rootMaxContentSize`
+  // Note: added to this func as a @hack. Should be in `_recalculateCollectiveSize`.
+  if (_root) {
+    if ((position.x + size.x) - _root->position.x > _root->_rootMaxContentSize.x) {
+      _root->_rootMaxContentSize.x = (position.x + size.x) - _root->position.x;
+    }
+    if (_children.empty()) {
+      if ((position.y + size.y) - _root->position.y > _root->_rootMaxContentSize.y) {
+        _root->_rootMaxContentSize.y = (position.y + size.y) - _root->position.y;
+      }
+    }
   }
 }
 
+Tree::~Tree() {
+  if (txtSpacer) txtSpacer->release();
+}
+
+void Tree::init(love::graphics::Graphics* g) {
+  txtSpacer = g->newText(font, buildColoredString(": ", g));
+}
+
 void Tree::update(double dt) {
-  focusPoint.update(dt);
   scrollManager.update(dt);
 }
 
 bool Tree::hasActiveAnimations() {
-  return focusPoint.isActive();
+  return false;//focusPoint.isActive();
 }
 
 void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
@@ -231,18 +281,20 @@ void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
   }
 
   // Add tag to parent node
+  auto colour = nodeChildGroupColors[selectedNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
   if (!selectedNode->hasTag(groupLabel)) {
-    auto colour = nodeChildGroupColors[selectedNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
-    selectedNode->addTag(g, groupLabel, colour);
     selectedNode->_childGroupCount++;
+    colour = nodeChildGroupColors[selectedNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
+    selectedNode->addTag(g, txtSpacer, groupLabel, colour.second, colour.first);
   }
 
   // New node
   auto* node = new TreeNode(g, font, valueFont);
+  node->_root = rootNode;
   node->_parent = selectedNode;
 
   // Link node as child
-  selectedNode->_children.push_back(node);
+  selectedNode->_children.emplace_back(node, colour.first);
 
   // Select new node
   selectedNode = node;
@@ -250,7 +302,7 @@ void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
 
 void Tree::addTagToNode(love::graphics::Graphics* g, const std::string& tagName, const std::string& value) {
   if (selectedNode) {
-    selectedNode->addTag(g, tagName, value);
+    selectedNode->addTag(g, txtSpacer, tagName, value);
   }
 }
 
@@ -270,7 +322,6 @@ void Tree::updateNodes() {
   if (rootNode) {
     rootNode->_recalculateCollectiveSize();
     rootNode->_updatePosition();
-    focusPoint.set(selectedNode->position);
   }
 }
 
@@ -299,14 +350,16 @@ void Tree::draw(love::graphics::Graphics* g, int xScissorOffset) {
   g->setScissor();
 }
 
-love::Vector2 Tree::getContentSize() {
-  if (!rootNode) {
-    return frameSize;
-  }
-  return rootNode->collectiveContentSize;
-}
-
 love::Vector2 Tree::getScrollOffset() {
-  auto contentSize = getContentSize();
-  return scrollManager.getOffset(frameSize, contentSize, focusPoint.get());
+  if (!rootNode || !selectedNode) {
+    return {};
+  }
+
+  love::Vector4 focusArea = {
+      selectedNode->position.x, selectedNode->position.y,
+      selectedNode->size.x, selectedNode->size.y
+  };
+  love::Vector4 framePadding = {30, 30, 30, 80};
+
+  return scrollManager.getOffset(frameSize, rootNode->_rootMaxContentSize, focusArea, framePadding);
 }

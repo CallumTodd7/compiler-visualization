@@ -183,6 +183,7 @@ void VisualMain::init() {
   tree.position = {(float) g->getWidth(), titleHeight};
   tree.font = fontVeraRegular18;
   tree.valueFont = fontSourceCodeProRegular20;
+  tree.init(g);
 }
 
 void VisualMain::setupNewMode(const Data& data) {
@@ -327,7 +328,7 @@ void VisualMain::handleParserData(const Data& data) {
       std::cout << "Parser - type: " << data.type << ", state: START_NODE, ast: " << data.nodeType << std::endl;
       tree.setNodeType(g, (std::stringstream() << data.nodeType).str());
       tree.updateNodes();
-      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      horizontalOffset.startAtCurrent({}).wait(1).finish();//TODO TEMP remove me
       break;
     case Data::END_NODE:
       std::cout << "Parser - type: " << data.type << ", state: END_NODE, ast: " << data.nodeType << std::endl;
@@ -338,7 +339,7 @@ void VisualMain::handleParserData(const Data& data) {
                 << data.param.second << "}" << std::endl;
       tree.addTagToNode(g, data.param.first, data.param.second);
       tree.updateNodes();
-      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      horizontalOffset.startAtCurrent({}).wait(1).finish();//TODO TEMP remove me
       break;
     case Data::ADD_CHILD:
       std::cout << "Parser - type: " << data.type << ", state: ADD_CHILD, group: " << data.parserChildGroup
@@ -348,7 +349,7 @@ void VisualMain::handleParserData(const Data& data) {
         tree.setNodeType(g, (std::stringstream() << data.targetNodeType).str());
       }
       tree.updateNodes();
-      horizontalOffset.startAtCurrent({}).wait(2).finish();//TODO TEMP remove me
+      horizontalOffset.startAtCurrent({}).wait(1).finish();//TODO TEMP remove me
       break;
     case Data::EXPECT:
       std::cout << "Parser - type: " << data.type << ", state: EXPECT, token: " << data.targetToken << std::endl;

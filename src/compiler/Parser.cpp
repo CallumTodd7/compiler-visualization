@@ -162,7 +162,7 @@ ASTBlock* Parser::parse() {
               .nodeType = node->type,
               .parserState = Data::ParserState::ADD_CHILD,
               .targetNodeType = ASTType::PROC_DECL,
-              .parserChildGroup = "children",
+              .parserChildGroup = "statements",
           });
     node->statements.push_back(parseProcedureDeclaration(isExternal));
   }
@@ -188,13 +188,6 @@ ASTBlock* Parser::parseBlock() {
         });
 
   node->parent = blockScopeStack.top();
-  ready({
-            .mode = Data::Mode::PARSER,
-            .type = Data::Type::SPECIFIC,
-            .nodeType = node->type,
-            .parserState = Data::ParserState::PARAM,
-            .param = {"parent", "null"},
-        });
 
   expect(Token::Type::TOKEN_BRACE_OPEN);
   blockScopeStack.push(node);
@@ -205,7 +198,7 @@ ASTBlock* Parser::parseBlock() {
               .type = Data::Type::SPECIFIC,
               .nodeType = node->type,
               .parserState = Data::ParserState::ADD_CHILD,
-              .parserChildGroup = "children",
+              .parserChildGroup = "statements",
           });
     node->statements.push_back(parseStatement());
   }
