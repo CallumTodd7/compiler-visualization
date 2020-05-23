@@ -1,14 +1,14 @@
 // Testing the parser
 
-extern void printf(u8 fmt, u8 a)
+extern void printf(void fmt, int a)
 
 // print out number
-void print(u8 number) {
+void print(int number) {
   printf("%d\n", number);
 }
 
-void printXTimes(u8 count) {
-  u8 i = count;
+void printXTimes(int count) {
+  int i = count;
   while (i > 0) {
     print(count);
     i = i - 1;
@@ -16,8 +16,8 @@ void printXTimes(u8 count) {
 }
 
 void main() {
-  u8 one = 1;
-  u8 two = 2;
+  int one = 1;
+  int two = 2;
   print(two);
   printXTimes(one + two);
 }

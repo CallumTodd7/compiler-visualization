@@ -8,6 +8,7 @@
 
 void HighlightableText::init(Graphics* g) {
   colour = g->getColor();
+  colourComment = love::Colorf(0.6, 0.6, 0.6, 1.0);
   font = g->getFont();
   text = g->newText(font);
 }
@@ -17,6 +18,7 @@ void HighlightableText::load(const std::string& filepath) {
   std::string line;
   while (std::getline(fileStream, line)) {
     textStrings.push_back(love::graphics::Font::ColoredString({line + '\n', colour}));
+    lineCount++;
     // `+ "--"` to add extra blank space at end of content width
     float width = (float) font->getWidth(line + "--");
     if (width > contentSize.x) {
@@ -24,9 +26,35 @@ void HighlightableText::load(const std::string& filepath) {
     }
   }
   // `+ 1` to add extra blank line at end of content height
-  contentSize.y = (float) (textStrings.size() + 1) * (font->getHeight() * font->getLineHeight());
+  contentSize.y = (float) (lineCount + 1) * (font->getHeight() * font->getLineHeight());
 
   text->set(textStrings);
+}
+
+void HighlightableText::add(const std::string& str) {
+  love::Colorf col = colour;
+  if (!str.empty() && str[0] == ';') {
+    col = colourComment;
+  }
+
+  textStrings.push_back(love::graphics::Font::ColoredString({str, col}));
+  // `+ "--"` to add extra blank space at end of content width
+  float width = (float) font->getWidth(str + "--");
+  if (width > contentSize.x) {
+    contentSize.x = width;
+  }
+
+  int lines = std::count(str.begin(), str.end(), '\n');
+  lineCount += lines;
+  for (size_t i = 0; i < lines; ++i) {
+    // `+ 1` to add extra blank line at end of content height
+    contentSize.y = (float) (lineCount + 3) * (font->getHeight() * font->getLineHeight());
+  }
+
+  text->set(textStrings);// TODO more efficiently
+
+  // Focus
+  lastFocusRect = {width, contentSize.y};
 }
 
 void HighlightableText::update(double dt) {

@@ -9,8 +9,7 @@ enum class DataType {
   UNINITIALISED = 0,
 
   VOID,
-  U8,
-  S8,
+  INT,
 };
 std::ostream& operator<<(std::ostream& os, const DataType& type);
 

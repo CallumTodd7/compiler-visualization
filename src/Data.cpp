@@ -36,6 +36,9 @@ std::ostream& operator<<(std::ostream& os, const Data::Mode& mode) {
     case Data::Mode::FINISHED:
       os << "FINISHED";
       break;
+    case Data::Mode::ERROR:
+      os << "ERROR";
+      break;
   }
   return os;
 }

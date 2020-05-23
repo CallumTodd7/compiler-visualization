@@ -38,6 +38,11 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
     throw;
   } catch (std::exception& ex) {
     std::cout << "Lexer threw an exception: " << ex.what() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = "An error occurred in the compiler",
+          });
     return 1;
   }
 
@@ -69,7 +74,7 @@ int compileWorker(const std::function<void(const Data&)>& ready) {
   });
 
   try {
-    Generator generator(root, cliOptions.destFilepath);
+    Generator generator(ready, root, cliOptions.destFilepath);
     generator.generate();
   } catch (ThreadTerminateException&) {
     throw;
@@ -128,6 +133,7 @@ int main(int argc, char* argv[]) {
     timer->step();
 
     double timeModifier = 1.0f;
+    bool paused = false;
 
     // Loop
     SDL_Event evt;
@@ -141,22 +147,40 @@ int main(int argc, char* argv[]) {
           case SDL_KEYUP:
             if (evt.key.keysym.sym == SDLK_ESCAPE) {
               isRunning = false;
-            } else if (evt.key.keysym.sym == SDLK_SPACE && !hasCompilerStarted) {
-              threadSync.runWorker();
-              hasCompilerStarted = true;
+            } else if (evt.key.keysym.sym == SDLK_SPACE) {
+              if (!hasCompilerStarted) {
+                threadSync.runWorker();
+                hasCompilerStarted = true;
+              } else {
+                paused = !paused;
+              }
             } else if (evt.key.keysym.sym == SDLK_MINUS) {
-              timeModifier /= 1.2;
-              std::cout << "Timer modifier: " << timeModifier << std::endl;
+              if (timeModifier > 0.05 + 0.009) { // 0.009 to effectively force a round up
+                timeModifier /= 1.2;
+              }
             } else if (evt.key.keysym.sym == SDLK_EQUALS) {
               timeModifier *= 1.2;
-              std::cout << "Timer modifier: " << timeModifier << std::endl;
             } else if (evt.key.keysym.sym == SDLK_0) {
               timeModifier = 1;
-              std::cout << "Timer modifier: " << timeModifier << std::endl;
             } else if (hasCompilerStarted && evt.key.keysym.sym == SDLK_RIGHT) {
               visuals.skipForwardOneStep();
             } else if (hasCompilerStarted && evt.key.keysym.sym == SDLK_DOWN) {
               visuals.skipToNextSection();
+            }
+
+            if (evt.key.keysym.sym == SDLK_SPACE
+                || evt.key.keysym.sym == SDLK_MINUS
+                || evt.key.keysym.sym == SDLK_EQUALS
+                || evt.key.keysym.sym == SDLK_0) {
+              if (paused) {
+                visuals.setTimeText("Paused");
+              } else {
+                auto ss = std::stringstream()
+                    << std::fixed
+                    << std::setprecision(timeModifier >= 1 ? 1 : 2);
+                ss << timeModifier << "x";
+                visuals.setTimeText(ss.str());
+              }
             }
             break;
         }
@@ -165,7 +189,9 @@ int main(int argc, char* argv[]) {
       double dt = timer->step();
       dt *= timeModifier;
 
-      visuals.update(dt);
+      if (!paused) {
+        visuals.update(dt);
+      }
 
       auto g = visuals.getGraphics();
       if (g->isActive()) {

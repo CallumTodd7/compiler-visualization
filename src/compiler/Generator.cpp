@@ -3,13 +3,20 @@
 //
 
 #include <iostream>
-#include <sstream>
 #include <functional>
 #include "Generator.h"
 #include "AST.h"
+#include "../Data.h"
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cppcoreguidelines-pro-type-static-cast-downcast"
+
+template<typename T>
+Generator::StreamHelper& operator<<(Generator::StreamHelper& h, T const& t) {
+  *h._fileOut << t;
+  h.ss << t;
+  return h;
+}
 
 std::string registerToByteEquivalent(Register reg, unsigned int bytes) {
   if (bytes == 1) {
@@ -30,13 +37,20 @@ std::string registerToByteEquivalent(Register reg, unsigned int bytes) {
 
 std::string registerTo8BitEquivalent(Register reg) {
   switch (reg) {
-    case NONE: return "REGISTER_NONE";
-    case RAX: return "al";
-    case RBX: return "bl";
-    case RCX: return "cl";
-    case RDX: return "dl";
-    case RSI: return "sil";
-    case RDI: return "dil";
+    case NONE:
+      return "REGISTER_NONE";
+    case RAX:
+      return "al";
+    case RBX:
+      return "bl";
+    case RCX:
+      return "cl";
+    case RDX:
+      return "dl";
+    case RSI:
+      return "sil";
+    case RDI:
+      return "dil";
     case R8:
     case R9:
     case R10:
@@ -52,13 +66,20 @@ std::string registerTo8BitEquivalent(Register reg) {
 
 std::string registerTo16BitEquivalent(Register reg) {
   switch (reg) {
-    case NONE: return "REGISTER_NONE";
-    case RAX: return "ax";
-    case RBX: return "bx";
-    case RCX: return "cx";
-    case RDX: return "dx";
-    case RSI: return "si";
-    case RDI: return "di";
+    case NONE:
+      return "REGISTER_NONE";
+    case RAX:
+      return "ax";
+    case RBX:
+      return "bx";
+    case RCX:
+      return "cx";
+    case RDX:
+      return "dx";
+    case RSI:
+      return "si";
+    case RDI:
+      return "di";
     case R8:
     case R9:
     case R10:
@@ -74,13 +95,20 @@ std::string registerTo16BitEquivalent(Register reg) {
 
 std::string registerTo32BitEquivalent(Register reg) {
   switch (reg) {
-    case NONE: return "REGISTER_NONE";
-    case RAX: return "eax";
-    case RBX: return "ebx";
-    case RCX: return "ecx";
-    case RDX: return "edx";
-    case RSI: return "esi";
-    case RDI: return "edi";
+    case NONE:
+      return "REGISTER_NONE";
+    case RAX:
+      return "eax";
+    case RBX:
+      return "ebx";
+    case RCX:
+      return "ecx";
+    case RDX:
+      return "edx";
+    case RSI:
+      return "esi";
+    case RDI:
+      return "edi";
     case R8:
     case R9:
     case R10:
@@ -96,8 +124,8 @@ std::string registerTo32BitEquivalent(Register reg) {
 
 ParameterClass identifyParamClass(DataType dataType) {
   switch (dataType) {
-    case DataType::U8: return INTEGER;
-    case DataType::S8: return INTEGER;
+    case DataType::INT:
+      return INTEGER;
 
     case DataType::UNINITIALISED:
     case DataType::VOID:
@@ -107,7 +135,8 @@ ParameterClass identifyParamClass(DataType dataType) {
 
 unsigned int Label::idCount = 1;
 
-Generator::Generator(ASTNode* astRoot, std::string filepath) {
+Generator::Generator(const std::function<void(const Data&)>& ready, ASTNode* astRoot, std::string filepath)
+    : ready(ready) {
   this->astRoot = astRoot;
 
   auto outputStream = new std::ofstream(filepath, std::ios::binary);
@@ -115,6 +144,8 @@ Generator::Generator(ASTNode* astRoot, std::string filepath) {
       .filepath = std::move(filepath),
       .fileStream = outputStream,
   };
+
+  _output = StreamHelper(file->fileStream);
 }
 
 Generator::~Generator() {
@@ -125,7 +156,7 @@ void Generator::generate() {
   std::cout << "Generating asm" << std::endl;
 
   comment("BEGIN leading boilerplate");
-  *file->fileStream << "global main\n";
+  output() << "global main\n";
   comment("END leading boilerplate");
 
   if (astRoot->type == ASTType::BLOCK) {
@@ -136,35 +167,50 @@ void Generator::generate() {
       if (statement->type == ASTType::PROC_DECL) {
         auto* procDecl = static_cast<ASTProcedure*>(statement);
         if (procDecl->isExternal) {
-          *file->fileStream << "extern " << procDecl->ident << "\n";
+          output() << "extern " << procDecl->ident << "\n";
         }
       }
     }
     comment("END externs");
 
     comment("BEGIN program");
-    *file->fileStream << "section .text\n";
+    output() << "section .text\n";
 
     walkBlock(block, true);
     comment("END program");
   } else {
-    std::cout << "Root is not block. Bad." << std::endl;
+    std::stringstream ssError;
+    ssError << "Root is not block. Bad.";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     file->fileStream->close();
     throw std::exception();
   }
 
   comment("BEGIN constants");
-  *file->fileStream << "section .data\n";
+  output() << "section .data\n";
   for (const auto& constantPair : constants) {
     auto str = constantPair.first;
     auto id = constantPair.second;
 
-    *file->fileStream << id << ": db ";
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::POP_CONSTANT,
+              .id = id,
+          });
+
+    output() << id << ": db ";
     writeStringLiteralList(str);
-    *file->fileStream << ", 0\n";
+    output() << ", 0\n";
   }
   comment("END constants");
 
+  flushOutput();
   file->fileStream->close();
   std::cout << "Done! See: " << file->filepath << std::endl;
 }
@@ -174,7 +220,7 @@ void Generator::writeStringLiteralList(const std::string& str) {
 
   while (charIndex < str.size()) {
     if (charIndex != 0) {
-      *file->fileStream << ", ";
+      output() << ", ";
     }
 
     if (str[charIndex] == '\\') {
@@ -183,14 +229,15 @@ void Generator::writeStringLiteralList(const std::string& str) {
 
         switch (pc) {
           case 'n':
-            *file->fileStream << "10";
+            output() << "10";
             charIndex += 2;
             continue;
           case '0':
-            *file->fileStream << "0";
+            output() << "0";
             charIndex += 2;
             continue;
-          default: break;
+          default:
+            break;
         }
       }
     }
@@ -200,19 +247,19 @@ void Generator::writeStringLiteralList(const std::string& str) {
       strSegment.push_back(str[charIndex]);
       charIndex++;
     }
-    *file->fileStream << "\"" << strSegment << "\"";
+    output() << "\"" << strSegment << "\"";
   }
 }
 
 void Generator::walkBlock(ASTBlock* node,
                           bool isEntrypoint,
                           const std::function<void(BlockScope&)>& initCallback) {
-  comment("BEGIN Block");
+  enterNode(node, "Block");
 
   if (!isEntrypoint) {
     // Set stackbase pointer
-    *file->fileStream << "push rbp\n";
-    *file->fileStream << "mov rbp, rsp\n";
+    output() << "push rbp\n";
+    output() << "mov rbp, rsp\n";
   }
 
   // Allocate local var space on stack
@@ -242,7 +289,7 @@ void Generator::walkBlock(ASTBlock* node,
   }
 
   if (scope.totalLocalBytes) {
-    *file->fileStream << "sub rsp, " << scope.totalLocalBytes << "\n";
+    output() << "sub rsp, " << scope.totalLocalBytes << "\n";
   }
 
   blockScopeStack.push(scope);
@@ -258,22 +305,30 @@ void Generator::walkBlock(ASTBlock* node,
 
   if (!isEntrypoint) {
     // Reset stackbase pointer & Dealloc local var space on stack
-    *file->fileStream << "mov rsp, rbp\n";
-    *file->fileStream << "pop rbp\n";
+    output() << "mov rsp, rbp\n";
+    output() << "pop rbp\n";
   } else {
     // Dealloc local var space on stack
-    *file->fileStream << "add rsp, " << scope.totalLocalBytes << "\n";
+    output() << "add rsp, " << scope.totalLocalBytes << "\n";
   }
 
-  comment("END Block");
+  exitNode(node, "Block");
 }
 
 void Generator::walkStatement(ASTStatement* node) {
   switch (node->type) {
-    case UNINITIALISED:
-      std::cout << "Statement uninitialised" << std::endl;
+    case UNINITIALISED: {
+      std::stringstream ssError;
+      ssError << "Statement uninitialised";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
+    }
     case BLOCK:
       walkBlock(static_cast<ASTBlock*>(node));
       break;
@@ -305,7 +360,14 @@ void Generator::walkStatement(ASTStatement* node) {
       walkReturn(static_cast<ASTReturn*>(node));
       break;
     default:
-      std::cout << "Statement must be an expression. Bad." << std::endl;
+      std::stringstream ssError;
+      ssError << "Statement must be an expression. Bad.";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
   }
@@ -322,25 +384,32 @@ Location* Generator::walkExpression(ASTExpression* node) {
     case VARIABLE:
       return walkVariableIdent(static_cast<ASTVariableIdent*>(node));
     default:
-      std::cout << "Expression must be a statement. Bad." << std::endl;
+      std::stringstream ssError;
+      ssError << "Expression must be a statement. Bad.";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
   }
 }
 
 void Generator::walkVariableDeclaration(ASTVariableDeclaration* node) {
-  comment("BEGIN VariableDeclaration");
+  enterNode(node, "VariableDeclaration");
 
   Location* loc = walkExpression(node->initialValueExpression);
   moveToMem(node->ident, loc, bytesOf(node->dataType));
 
   removeLocation(loc);
 
-  comment("END VariableDeclaration");
+  exitNode(node, "VariableDeclaration");
 }
 
 void Generator::walkProcedureDeclaration(ASTProcedure* node) {
-  comment("BEGIN ProcedureDeclaration");
+  enterNode(node, "ProcedureDeclaration");
 
   if (node->isExternal) {
     comment("external: " + node->ident);
@@ -386,7 +455,7 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
     std::vector<Location*> parameterLocations;
 
     // Write head
-    *file->fileStream << node->ident << ":\n";
+    output() << node->ident << ":\n";
 
     // Write block
     walkBlock(node->block, false, [&](BlockScope& scope) -> void {
@@ -433,6 +502,13 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
             registerContents[param->paramRegister] = var.location;
             locationMap.insert_or_assign(var.location, param->paramRegister);
+            ready({
+                      .mode = Data::Mode::CODE_GEN,
+                      .type = Data::Type::SPECIFIC,
+                      .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+                      .reg = param->paramRegister,
+                      .loc = var.location,
+                  });
             break;
           }
           default:
@@ -449,7 +525,14 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
       if (scope.parent) {
         scope.parent->procedures.insert_or_assign(node->ident, proc);
       } else {
-        std::cout << "Can't add procedure" << std::endl;
+        std::stringstream ssError;
+        ssError << "Can't add procedure";
+        std::cout << ssError.str() << std::endl;
+        ready({
+                  .mode = Data::Mode::ERROR,
+                  .type = Data::Type::MODE_CHANGE,
+                  .string = ssError.str(),
+              });
         throw std::exception();
       }
     });
@@ -457,12 +540,12 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
     // Write tail
     if (node->ident == "main") {
       comment("BEGIN main exit boilerplate");
-      *file->fileStream << "mov rax, 1\n"
-                        << "xor rdi, rdi\n"
-                        << "syscall\n";
+      output() << "mov rax, 1\n"
+             << "xor rdi, rdi\n"
+             << "syscall\n";
       comment("END main exit boilerplate");
     } else {
-      *file->fileStream << "ret\n";
+      output() << "ret\n";
     }
 
     // Remove params from internal map
@@ -472,19 +555,26 @@ void Generator::walkProcedureDeclaration(ASTProcedure* node) {
 
   }
 
-  comment("END ProcedureDeclaration");
+  exitNode(node, "ProcedureDeclaration");
 }
 
 void Generator::walkProcedureCall(ASTProcedureCall* node) {
-  comment("BEGIN ProcedureCall");
+  enterNode(node, "ProcedureCall");
 
   auto proc = blockScopeStack.top().searchForProcedure(node->ident);
 
   // TODO expand check for matching data types too (i.e. Check the proc signature)
   if (proc.parameters.size() != node->parameters.size()) {
-    std::cout << "Parameter mismatch! "
-              << "Proc decl has " << proc.parameters.size() << ", "
-              << "proc call has " << node->parameters.size() << std::endl;
+    std::stringstream ssError;
+    ssError << "Parameter mismatch! "
+            << "Proc decl has " << proc.parameters.size() << ", "
+            << "proc call has " << node->parameters.size();
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     throw std::exception();
   }
 
@@ -533,11 +623,11 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
         throw std::exception();
     }
   }
-  *file->fileStream << "xor rax, rax\n"; //zero rax because printf is varargs & no floats
+  output() << "xor rax, rax\n"; //zero rax because printf is varargs & no floats
 
   auto savedRegisters = pushCallerSaved();
 
-  *file->fileStream << "call " << node->ident << "\n";
+  output() << "call " << node->ident << "\n";
 
   for (size_t i = 0; i < paramLocs.size(); ++i) {
     if (i < TOTAL_PROC_CALL_REGISTERS) {
@@ -556,11 +646,11 @@ void Generator::walkProcedureCall(ASTProcedureCall* node) {
     removeLocation(loc);
   }
 
-  comment("END ProcedureCall");
+  exitNode(node, "ProcedureCall");
 }
 
 void Generator::walkVariableAssignment(ASTVariableAssignment* node) {
-  comment("BEGIN VariableAssignment");
+  enterNode(node, "VariableAssignment");
 
   auto var = blockScopeStack.top().searchForVariable(node->ident);
   Location* loc = walkExpression(node->newValueExpression);
@@ -568,11 +658,11 @@ void Generator::walkVariableAssignment(ASTVariableAssignment* node) {
 
   removeLocation(loc);
 
-  comment("END VariableAssignment");
+  exitNode(node, "VariableAssignment");
 }
 
 void Generator::walkIf(ASTIf* node) {
-  comment("BEGIN If");
+  enterNode(node, "If");
 
   Label labelFalse(node->falseStatement), labelEnd;
 
@@ -581,14 +671,14 @@ void Generator::walkIf(ASTIf* node) {
   auto* tempLoc = new Location();
   Register regConditionalResult = getRegisterForCopy(node->conditional->location, tempLoc);
 
-  *file->fileStream << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
+  output() << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
   removeLocation(regConditionalResult, tempLoc);
   removeLocation(node->conditional->location, false);
 
   if (node->falseStatement) {
-    *file->fileStream << "jz " << labelFalse << "\n";
+    output() << "jz " << labelFalse << "\n";
   } else {
-    *file->fileStream << "jz " << labelEnd << "\n";
+    output() << "jz " << labelEnd << "\n";
   }
 
   // True
@@ -596,35 +686,35 @@ void Generator::walkIf(ASTIf* node) {
 
   // False
   if (node->falseStatement) {
-    *file->fileStream << "jmp " << labelEnd << "\n";
-    *file->fileStream << labelFalse << ":\n";
+    output() << "jmp " << labelEnd << "\n";
+    output() << labelFalse << ":\n";
 
     walkStatement(node->falseStatement);
   }
 
   // End
-  *file->fileStream << labelEnd << ":\n";
+  output() << labelEnd << ":\n";
 
-  comment("END If");
+  exitNode(node, "If");
 }
 
 void Generator::walkWhile(ASTWhile* node) {
-  comment("BEGIN While");
+  enterNode(node, "While");
 
   Label labelStart, labelEnd;
 
   // Condition
-  *file->fileStream << labelStart << ":\n";
+  output() << labelStart << ":\n";
 
   walkExpression(node->conditional);
   auto* tempLoc = new Location();
   Register regConditionalResult = getRegisterForCopy(node->conditional->location, tempLoc);
 
-  *file->fileStream << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
+  output() << "test " << regConditionalResult << ", " << regConditionalResult << "\n";
   removeLocation(regConditionalResult, tempLoc);
   removeLocation(node->conditional->location, false);
 
-  *file->fileStream << "jz " << labelEnd << "\n";
+  output() << "jz " << labelEnd << "\n";
 
   // Body
   walkBlock(node->body, false, [labelStart, labelEnd](BlockScope& scope) -> void {
@@ -632,16 +722,16 @@ void Generator::walkWhile(ASTWhile* node) {
     scope.endLabel = labelEnd;
   });
 
-  *file->fileStream << "jmp " << labelStart << "\n";
+  output() << "jmp " << labelStart << "\n";
 
   // End
-  *file->fileStream << labelEnd << ":\n";
+  output() << labelEnd << ":\n";
 
-  comment("END While");
+  exitNode(node, "While");
 }
 
 void Generator::walkContinue(ASTContinue* node) {
-  comment("BEGIN Continue");
+  enterNode(node, "Continue");
 
   BlockScope* scope = &blockScopeStack.top();
   while (scope) {
@@ -653,23 +743,23 @@ void Generator::walkContinue(ASTContinue* node) {
       unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
       for (unsigned int i = 0; i < stackHeightDist; ++i) {
         // Reset stackbase pointer & Dealloc local var space on stack
-        *file->fileStream << "mov rsp, rbp\n";
-        *file->fileStream << "pop rbp\n";
+        output() << "mov rsp, rbp\n";
+        output() << "pop rbp\n";
       }
 
       // Jump
-      *file->fileStream << "jmp " << scope->startLabel << "\n";
+      output() << "jmp " << scope->startLabel << "\n";
       break;
     } else {
       scope = scope->parent;
     }
   }
 
-  comment("END Continue");
+  exitNode(node, "Continue");
 }
 
 void Generator::walkBreak(ASTBreak* node) {
-  comment("BEGIN Break");
+  enterNode(node, "Break");
 
   BlockScope* scope = &blockScopeStack.top();
   while (scope) {
@@ -681,23 +771,23 @@ void Generator::walkBreak(ASTBreak* node) {
       unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
       for (unsigned int i = 0; i < stackHeightDist; ++i) {
         // Reset stackbase pointer & Dealloc local var space on stack
-        *file->fileStream << "mov rsp, rbp\n";
-        *file->fileStream << "pop rbp\n";
+        output() << "mov rsp, rbp\n";
+        output() << "pop rbp\n";
       }
 
       // Jump
-      *file->fileStream << "jmp " << scope->endLabel << "\n";
+      output() << "jmp " << scope->endLabel << "\n";
       break;
     } else {
       scope = scope->parent;
     }
   }
 
-  comment("END Break");
+  exitNode(node, "Break");
 }
 
 void Generator::walkReturn(ASTReturn* node) {
-  comment("BEGIN Return");
+  enterNode(node, "Return");
 
   BlockScope* scope = &blockScopeStack.top();
   while (scope) {
@@ -707,12 +797,12 @@ void Generator::walkReturn(ASTReturn* node) {
         unsigned int stackHeightDist = blockScopeStack.top().stackHeight - scope->stackHeight + 1;
         for (unsigned int i = 0; i < stackHeightDist; ++i) {
           // Reset stackbase pointer & Dealloc local var space on stack
-          *file->fileStream << "mov rsp, rbp\n";
-          *file->fileStream << "pop rbp\n";
+          output() << "mov rsp, rbp\n";
+          output() << "pop rbp\n";
         }
 
         // Jump
-        *file->fileStream << "jmp " << scope->endLabel << "\n";
+        output() << "jmp " << scope->endLabel << "\n";
         break;
       }
       break;
@@ -720,11 +810,11 @@ void Generator::walkReturn(ASTReturn* node) {
     scope = scope->parent;
   }
 
-  comment("END Return");
+  exitNode(node, "Return");
 }
 
 Location* Generator::walkBinOp(ASTBinOp* node) {
-  comment("BEGIN BinOp");
+  enterNode(node, "BinOp");
   //DEFER: comment("END BinOp");
 
   // Special case for Logical Or: Don't walk right side if left is true
@@ -742,7 +832,7 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
     file->fileStream->close();
     throw std::exception();
 
-    comment("END BinOp");
+    exitNode(node, "BinOp");
     return node->location;
   }
 
@@ -754,77 +844,92 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
 
   switch (node->op) {
     case ExpressionOperatorType::ADD:
-      *file->fileStream << "add " << regLeft << ", " << regRight << "\n";
+      output() << "add " << regLeft << ", " << regRight << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MINUS:
-      *file->fileStream << "sub " << regLeft << ", " << regRight << "\n";
+      output() << "sub " << regLeft << ", " << regRight << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     case ExpressionOperatorType::MULTIPLY: {
-      *file->fileStream << "imul " << regLeft << ", " << regRight << "\n";
+      output() << "imul " << regLeft << ", " << regRight << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::DIVIDE: {
-      *file->fileStream << "idiv " << regLeft << ", " << regRight << "\n";
-      swapLocation(regLeft, tempLeftLoc, node->location);
+      // Move in dividend
+      moveToRegister(Register::RAX, tempLeftLoc);
+
+      // Zero result for remainder
+      requireRegistersFree({Register::RDX});
+      output() << "xor " << Register::RDX << ", " << Register::RDX << " ";
+      comment("zero");
+
+      // Sign extend above two
+      output() << "cdq ";
+      comment("sign extend EAX into EDX");
+
+      // Divide by divisor
+      output() << "idiv " << registerTo32BitEquivalent(regRight) << "\n";
+
+      // Extract quotient
+      swapLocation(Register::RAX, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::EQUALS: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setz " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setz " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::NOT_EQUALS: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setnz " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setnz " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::LESS_THAN: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setl " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setl " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::LESS_THAN_OR_EQUAL: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setle " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setle " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::GREATER_THAN: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setg " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setg " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
     }
     case ExpressionOperatorType::GREATER_THAN_OR_EQUAL: {
-      *file->fileStream << "cmp " << regLeft << ", " << regRight << "\n";
+      output() << "cmp " << regLeft << ", " << regRight << "\n";
       std::string regLeft8BitStr = registerTo8BitEquivalent(regLeft);
-      *file->fileStream << "setge " << regLeft8BitStr << "\n";
-      *file->fileStream << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
+      output() << "setge " << regLeft8BitStr << "\n";
+      output() << "movzx " << regLeft << ", " << regLeft8BitStr << "\n";
       swapLocation(regLeft, tempLeftLoc, node->location);
       removeLocation(regRight, node->right->location);
       break;
@@ -834,25 +939,41 @@ Location* Generator::walkBinOp(ASTBinOp* node) {
       file->fileStream->close();
       throw std::exception();
     }
-    case ExpressionOperatorType::UNINITIALISED:
-      std::cout << "BinOp UNINITIALISED" << std::endl;
+    case ExpressionOperatorType::UNINITIALISED: {
+      std::stringstream ssError;
+      ssError << "BinOp UNINITIALISED";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
-    default:
-      std::cout << "BinOp not implemented: " << node->op << std::endl;
+    }
+    default: {
+      std::stringstream ssError;
+      ssError << "BinOp not implemented: " << node->op;
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
+    }
   }
 
   removeLocation(node->left->location, false);
 
-  comment("END BinOp");
+  exitNode(node, "BinOp");
 
   return node->location;
 }
 
 Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
-  comment("BEGIN UnaryOp");
+  enterNode(node, "UnaryOp");
 
   walkExpression(node->child);
   auto* tempChildLoc = new Location();
@@ -863,38 +984,54 @@ Location* Generator::walkUnaryOp(ASTUnaryOp* node) {
       swapLocation(regChild, tempChildLoc, node->location);
       break;
     case ExpressionOperatorType::MINUS:
-      *file->fileStream << "xor " << Register::R15 << ", " << Register::R15 << ";zero\n";
-      *file->fileStream << "sub " << Register::R15 << ", " << regChild << "\n";
-      *file->fileStream << "mov " << regChild << ", " << Register::R15 << "\n";
+      output() << "xor " << Register::R15 << ", " << Register::R15 << ";zero\n";
+      output() << "sub " << Register::R15 << ", " << regChild << "\n";
+      output() << "mov " << regChild << ", " << Register::R15 << "\n";
       swapLocation(regChild, tempChildLoc, node->location);
       break;
     case ExpressionOperatorType::LOGICAL_NOT: {
-      *file->fileStream << "cmp " << regChild << ", " << 0 << "\n";
+      output() << "cmp " << regChild << ", " << 0 << "\n";
       std::string regChild8BitStr = registerTo8BitEquivalent(regChild);
-      *file->fileStream << "sete " << regChild8BitStr << "\n";
-      *file->fileStream << "movzx " << regChild << ", " << regChild8BitStr << "\n";
+      output() << "sete " << regChild8BitStr << "\n";
+      output() << "movzx " << regChild << ", " << regChild8BitStr << "\n";
       swapLocation(regChild, tempChildLoc, node->location);
       break;
     }
-    case ExpressionOperatorType::UNINITIALISED:
-      std::cout << "UnaryOp UNINITIALISED" << std::endl;
+    case ExpressionOperatorType::UNINITIALISED: {
+      std::stringstream ssError;
+      ssError << "UnaryOp UNINITIALISED" << node->op;
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
-    default:
-      std::cout << "UnaryOp not implemented: " << node->op << std::endl;
+    }
+    default: {
+      std::stringstream ssError;
+      ssError << "UnaryOp not implemented: " << node->op;
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       file->fileStream->close();
       throw std::exception();
+    }
   }
 
   removeLocation(node->child->location, false);
 
-  comment("END UnaryOp");
+  exitNode(node, "UnaryOp");
 
   return node->location;
 }
 
 Location* Generator::walkLiteral(ASTLiteral* node) {
-  comment("BEGIN Literal");
+  enterNode(node, "Literal");
 
   switch (node->valueType) {
     case ASTLiteral::ValueType::STRING: {
@@ -904,8 +1041,16 @@ Location* Generator::walkLiteral(ASTLiteral* node) {
       if (ret.second == false) {
         id = ret.first->second;
       }
+      ready({
+                .mode = Data::Mode::CODE_GEN,
+                .type = Data::Type::SPECIFIC,
+                .codeGenState = Data::CodeGenState::PUSH_CONSTANT,
+                .id = id,
+                .string = str,
+                .isNew = ret.second
+            });
       getRegisterForConst(node->location, id);
-//      *file->fileStream << "mov rdi, " << id << "\n";
+//      output() << "mov rdi, " << id << "\n";
       break;
     }
     case ASTLiteral::ValueType::INTEGER: {
@@ -917,7 +1062,7 @@ Location* Generator::walkLiteral(ASTLiteral* node) {
       break;
   }
 
-  comment("END Literal");
+  exitNode(node, "Literal");
 
   return node->location;
 }
@@ -948,7 +1093,7 @@ Location* Generator::walkVariableIdent(ASTVariableIdent* node) {
     node->location = recallFromMem(node->ident, bytesOf(node->dataType));
   }
 
-  comment("END VariableIdent");
+  exitNode(node, "VariableIdent");
 
   return node->location;
 }
@@ -967,11 +1112,11 @@ std::vector<std::pair<Register, Location*>> Generator::pushCallerSaved() {
 
     Location* loc = registerContents[reg];
     if (loc != nullptr) {
-      *file->fileStream << "push " << reg;
+      output() << "push " << reg;
       if (genComments) {
-        *file->fileStream << "; with " << loc;
+        output() << "; with " << loc;
       }
-      *file->fileStream << "\n";
+      output() << "\n";
       savedRegisters.emplace_back(reg, loc);
     }
   }
@@ -988,11 +1133,11 @@ void Generator::popCallerSaved(std::vector<std::pair<Register, Location*>> saved
     Register reg = savedRegisters[i].first;
     Location* loc = savedRegisters[i].second;
 
-    *file->fileStream << "pop " << reg;
+    output() << "pop " << reg;
     if (genComments) {
-      *file->fileStream << "; with " << loc;
+      output() << "; with " << loc;
     }
-    *file->fileStream << "\n";
+    output() << "\n";
 
 
     swapLocation(reg, registerContents[reg], loc);
@@ -1012,22 +1157,22 @@ Register Generator::registerWithAddressForVariable(BlockScope::Variable variable
 #endif
 
   if (stackHeightDist > 0) {
-    *file->fileStream << "mov " << reg << ", [rbp]\n";
+    output() << "mov " << reg << ", [rbp]\n";
     for (unsigned int i = 0; i < stackHeightDist - 1; ++i) {
-      *file->fileStream << "mov " << reg << ", [" << reg << "]\n";
+      output() << "mov " << reg << ", [" << reg << "]\n";
     }
   } else {
-    *file->fileStream << "mov " << reg << ", rbp\n";
+    output() << "mov " << reg << ", rbp\n";
   }
 
   if (variable.parameter) {
     // Skips over procedure's return address and stackbase pointer on the stack
     constexpr unsigned int parameterOffset = 8;
 
-    *file->fileStream << "add " << reg << ", " << (parameterOffset + offset) << "\n";
+    output() << "add " << reg << ", " << (parameterOffset + offset) << "\n";
   } else {
     offset += 1; // + 1 because we're using rbp instead of rsp
-    *file->fileStream << "sub " << reg << ", " << offset << "\n";
+    output() << "sub " << reg << ", " << offset << "\n";
   }
 
   return reg;
@@ -1039,10 +1184,10 @@ void Generator::moveToMem(const std::string& ident, Location* location, unsigned
   Register locRegister = locationMap.at(location);
   std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
   if (genComments) {
-    *file->fileStream << ";mov " << *location << " to mem(ident: " << ident << ")\n";
+    output() << ";mov " << *location << " to mem(ident: " << ident << ")\n";
   }
   Register varRegister = registerWithAddressForVariable(var);
-  *file->fileStream << "mov [" << varRegister << "], " << locRegisterStr << "\n";
+  output() << "mov [" << varRegister << "], " << locRegisterStr << "\n";
 }
 
 Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes) {
@@ -1058,12 +1203,19 @@ Location* Generator::recallFromMem(const std::string& ident, unsigned int bytes)
   std::string locRegisterStr = registerToByteEquivalent(locRegister, bytes);
   if (bytes != 8) {
     // Zero 64bit register if only a part of it will be filled
-    *file->fileStream << "xor " << locRegister << ", " << locRegister << "\n";
+    output() << "xor " << locRegister << ", " << locRegister << "\n";
   }
-  *file->fileStream << "mov " << locRegisterStr << ", [" << varRegister << "]\n";
+  output() << "mov " << locRegisterStr << ", [" << varRegister << "]\n";
 
   registerContents[locRegister] = var.location;
   locationMap.insert_or_assign(var.location, locRegister);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+            .reg = locRegister,
+            .loc = var.location,
+        });
 
   return var.location;
 }
@@ -1073,14 +1225,28 @@ void Generator::recallFromParamRegister(Location* location) {
 
   Register exitingRegister = locationMap.at(location);
 
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::MOVE_REG,
+            .reg = newRegister,
+            .reg2 = exitingRegister,
+        });
+
   if (genComments) {
-    *file->fileStream << ";mov " << location << " (in " << exitingRegister << ") to "
-      << newRegister << "\n";
+    output() << ";mov " << location << " (in " << exitingRegister << ") to " << newRegister << "\n";
   }
-  *file->fileStream << "mov " << newRegister << ", " << exitingRegister << "\n";
+  output() << "mov " << newRegister << ", " << exitingRegister << "\n";
 
   registerContents[newRegister] = location;
   locationMap.insert_or_assign(location, newRegister);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+            .reg = newRegister,
+            .loc = location,
+        });
 }
 
 void Generator::requireRegistersFree(const std::vector<Register>& registers) {
@@ -1105,6 +1271,16 @@ void Generator::moveToRegister(Register newRegister,
   dumpRegisters(true);
 #endif
 
+  Register oldRegister = locationMap.at(location);
+
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::MOVE_REG,
+            .reg = oldRegister,
+            .reg2 = newRegister,
+        });
+
   if (registerContents[newRegister] != nullptr) {
     std::cout << "WARNING: Register " << newRegister
               << " already has contents (" << registerContents[newRegister]
@@ -1114,34 +1290,81 @@ void Generator::moveToRegister(Register newRegister,
     Register freeRegister = getAvailableRegister(excludingRegisters);
     Location* existingLoc = registerContents[newRegister];
 
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::MOVE_REG,
+              .reg = newRegister,
+              .reg2 = freeRegister,
+              .keep = true,
+          });
+
     if (genComments) {
-      *file->fileStream << ";mov " << *existingLoc << " to " << freeRegister
-                        << " (relocation)" << "\n";
+      output() << ";mov " << *existingLoc << " to " << freeRegister << " (relocation)" << "\n";
     }
-    *file->fileStream << "mov " << freeRegister << ", " << newRegister << "\n";
+    output() << "mov " << freeRegister << ", " << newRegister << "\n";
 
     registerContents[freeRegister] = existingLoc;
     locationMap.insert_or_assign(existingLoc, freeRegister);
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+              .reg = freeRegister,
+              .loc = existingLoc,
+          });
   }
 
-  Register oldRegister = locationMap.at(location);
   if (genComments) {
-    *file->fileStream << ";mov " << *location << " to " << newRegister << "\n";
+    output() << ";mov " << *location << " to " << newRegister << "\n";
   }
-  *file->fileStream << "mov " << newRegister << ", " << oldRegister << "\n";
+  output() << "mov " << newRegister << ", " << oldRegister << "\n";
 
   registerContents[oldRegister] = nullptr;
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG,
+            .reg = oldRegister,
+        });
   registerContents[newRegister] = location;
   locationMap.insert_or_assign(location, newRegister);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+            .reg = newRegister,
+            .loc = location,
+        });
 }
 
 void Generator::swapLocation(Register reg, Location* oldLoc, Location* newLoc, bool forceRmParam) {
   registerContents[reg] = newLoc;
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG,
+            .reg = reg,
+            .loc = newLoc,
+        });
 
   if (oldLoc && (!oldLoc->isParameter || forceRmParam)) {
     locationMap.erase(oldLoc);
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::SET_LOC,
+              .loc = oldLoc,
+          });
   }
   locationMap.insert_or_assign(newLoc, reg);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_LOC,
+            .loc = newLoc,
+            .reg = reg,
+        });
 }
 
 void Generator::removeLocation(Register reg, Location* oldLoc, bool forceRmParam) {
@@ -1156,11 +1379,29 @@ void Generator::removeLocation(Register reg, Location* oldLoc, bool forceRmParam
   }
 
   registerContents[reg] = nullptr;
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG,
+            .reg = reg,
+        });
 
   if (oldLoc) {
     locationMap.erase(oldLoc);
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::SET_LOC,
+              .loc = oldLoc,
+          });
   } else {
     locationMap.erase(existingLoc);
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::SET_LOC,
+              .loc = existingLoc,
+          });
   }
 }
 
@@ -1177,7 +1418,19 @@ void Generator::removeLocation(Location* oldLoc, bool forceRmParam) {
   }
 
   registerContents[reg] = nullptr;
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG,
+            .reg = reg,
+        });
   locationMap.erase(oldLoc);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_LOC,
+            .loc = oldLoc,
+        });
 }
 
 Register Generator::getAvailableRegister() {
@@ -1193,7 +1446,14 @@ Register Generator::getAvailableRegister() {
   }
 
   if (availableRegister == Register::NONE) {
-    std::cout << "No available register!" << std::endl;
+    std::stringstream ssError;
+    ssError << "No available register!";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     file->fileStream->close();
     throw std::exception();
   }
@@ -1220,7 +1480,14 @@ Register Generator::getAvailableRegister(const std::vector<Register>& excludingR
   }
 
   if (availableRegister == Register::NONE) {
-    std::cout << "No available register!" << std::endl;
+    std::stringstream ssError;
+    ssError << "No available register!";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     file->fileStream->close();
     throw std::exception();
   }
@@ -1263,9 +1530,23 @@ Register Generator::getRegisterFor(Location* location, bool isConstant, const st
 #endif
 
     if (isConstant) {
-      *file->fileStream << "mov " << availableRegister << ", " << constant << "\n";
+      ready({
+                .mode = Data::Mode::CODE_GEN,
+                .type = Data::Type::SPECIFIC,
+                .codeGenState = Data::CodeGenState::MOVE_CONST,
+                .reg = availableRegister,
+            });
+
+      output() << "mov " << availableRegister << ", " << constant << "\n";
       registerContents[availableRegister] = location;
       locationMap.insert_or_assign(location, availableRegister);
+      ready({
+                .mode = Data::Mode::CODE_GEN,
+                .type = Data::Type::SPECIFIC,
+                .codeGenState = Data::CodeGenState::SET_REG_AND_LOC,
+                .reg = availableRegister,
+                .loc = location,
+            });
     } else {
       moveToRegister(availableRegister, location);
     }
@@ -1273,7 +1554,14 @@ Register Generator::getRegisterFor(Location* location, bool isConstant, const st
   }
 
   // Else, error (for now; TODO)
-  std::cout << "No register for " << *location << std::endl;
+  std::stringstream ssError;
+  ssError << "No register for " << *location;
+  std::cout << ssError.str() << std::endl;
+  ready({
+            .mode = Data::Mode::ERROR,
+            .type = Data::Type::MODE_CHANGE,
+            .string = ssError.str(),
+        });
   file->fileStream->close();
   throw std::exception();
 }
@@ -1286,13 +1574,36 @@ Register Generator::getRegisterForCopy(Location* location, Location* newLocation
 #endif
 
   Register oldRegister = locationMap.at(location);
+
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::MOVE_REG,
+            .reg = newRegister,
+            .reg2 = oldRegister,
+        });
+
   if (genComments) {
-    *file->fileStream << ";mov " << *location << " to " << newRegister << "\n";
+    output() << ";mov " << *location << " to " << newRegister << "\n";
   }
-  *file->fileStream << "mov " << newRegister << ", " << oldRegister << "\n";
+  output() << "mov " << newRegister << ", " << oldRegister << "\n";
 
   registerContents[newRegister] = location;
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_REG,
+            .reg = newRegister,
+            .loc = location,
+        });
   locationMap.insert_or_assign(newLocation, newRegister);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .codeGenState = Data::CodeGenState::SET_LOC,
+            .reg = newRegister,
+            .loc = newLocation,
+        });
 
   return newRegister;
 }
@@ -1300,7 +1611,7 @@ Register Generator::getRegisterForCopy(Location* location, Location* newLocation
 void Generator::comment(const std::string& comment) {
   if (!genComments) return;
 
-  *file->fileStream << ";" << comment << "\n";
+  output() << ";" << comment << "\n";
 }
 
 void Generator::dumpRegisters(bool mismatchCheckOnly) {
@@ -1309,7 +1620,7 @@ void Generator::dumpRegisters(bool mismatchCheckOnly) {
 
   // Count registers
   for (int i = 0; i < TOTAL_REGISTERS; ++i) {
-    auto reg = (Register)i;
+    auto reg = (Register) i;
     Location* loc = registerContents[reg];
     if (loc) {
       regCount++;
@@ -1331,20 +1642,20 @@ void Generator::dumpRegisters(bool mismatchCheckOnly) {
 
   // Print registers
   if (genComments) {
-    *file->fileStream << ";Dump registers:\n";
+    output() << ";Dump registers:\n";
   }
   std::cout << "Dump registers:" << std::endl;
   for (int i = 0; i < TOTAL_REGISTERS; ++i) {
-    auto reg = (Register)i;
+    auto reg = (Register) i;
     Location* loc = registerContents[reg];
     if (loc) {
       if (genComments) {
-        *file->fileStream << "; - " << reg << ": " << loc->id << "\n";
+        output() << "; - " << reg << ": " << loc->id << "\n";
       }
       std::cout << "- " << reg << ": " << loc->id << std::endl;
     } else {
       if (genComments) {
-        *file->fileStream << "; - " << reg << ": -" << "\n";
+        output() << "; - " << reg << ": -" << "\n";
       }
       std::cout << "- " << reg << ": -" << std::endl;
     }
@@ -1352,7 +1663,7 @@ void Generator::dumpRegisters(bool mismatchCheckOnly) {
 
   // Print locations
   if (genComments) {
-    *file->fileStream << ";Dump locations:\n";
+    output() << ";Dump locations:\n";
   }
   std::cout << "Dump locations:" << std::endl;
   for (auto pair : locationMap) {
@@ -1360,12 +1671,12 @@ void Generator::dumpRegisters(bool mismatchCheckOnly) {
     Register reg = pair.second;
     if (reg != Register::NONE) {
       if (genComments) {
-        *file->fileStream << "; - " << loc->id << ": " << reg << "\n";
+        output() << "; - " << loc->id << ": " << reg << "\n";
       }
       std::cout << "- " << loc->id << ": " << reg << std::endl;
     } else {
       if (genComments) {
-        *file->fileStream << "; - " << loc->id << ": -" << "\n";
+        output() << "; - " << loc->id << ": -" << "\n";
       }
       std::cout << "- " << loc->id << ": -" << std::endl;
     }
@@ -1374,10 +1685,52 @@ void Generator::dumpRegisters(bool mismatchCheckOnly) {
   // Print mismatch
   if (locCount != regCount) {
     if (genComments) {
-      *file->fileStream << "; !!!MISMATCH!!!\n";
+      output() << "; !!!MISMATCH!!!\n";
+      output() << "; !!!MISMATCH!!!\n";
     }
     std::cout << "!!!MISMATCH!!!" << std::endl;
   }
+}
+
+Generator::StreamHelper& Generator::output() {
+  flushOutput();
+  _isOutputFlushed = false;
+  return _output;
+}
+
+void Generator::flushOutput() {
+  if (!_isOutputFlushed) {
+    ready({
+              .mode = Data::Mode::CODE_GEN,
+              .type = Data::Type::SPECIFIC,
+              .codeGenState = Data::CodeGenState::OUTPUT,
+              .string = _output.ss.str(),
+          });
+    _output.ss.str(std::string());
+    _isOutputFlushed = true;
+  }
+}
+
+void Generator::enterNode(ASTNode* node, const std::string& commentName) {
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .nodeType = node->type,
+            .codeGenState = Data::CodeGenState::ENTER_NODE,
+            .nodeId = node->nodeId,
+        });
+  comment("BEGIN " + commentName);
+}
+
+void Generator::exitNode(ASTNode* node, const std::string& commentName) {
+  comment("END " + commentName);
+  ready({
+            .mode = Data::Mode::CODE_GEN,
+            .type = Data::Type::SPECIFIC,
+            .nodeType = node->type,
+            .codeGenState = Data::CodeGenState::EXIT_NODE,
+            .nodeId = node->nodeId,
+        });
 }
 
 #pragma clang diagnostic pop

@@ -23,12 +23,14 @@ public:
 
 private:
   std::vector<love::graphics::Font::ColoredString> textStrings;
+  unsigned long lineCount = 0;
   love::graphics::Text* text = nullptr;
 
   love::Vector2 contentSize;
 
   love::graphics::Font* font = nullptr;
   love::Colorf colour;
+  love::Colorf colourComment;
 
   bool showHighlight = false;
   Tween<love::Vector4> highlightRect;
@@ -47,6 +49,7 @@ private:
 
 public:
   void load(const std::string& filepath);
+  void add(const std::string& str);
 
   void init(Graphics* g);
   void update(double dt);

@@ -7,7 +7,11 @@
 
 #include "AST.h"
 #include <fstream>
+#include <sstream>
 #include <map>
+#include <utility>
+
+struct Data;
 
 enum Register {
   NONE = 1000,
@@ -152,6 +156,15 @@ struct BlockScope {
 };
 
 class Generator {
+public:
+  struct StreamHelper {
+    StreamHelper() = default;
+    StreamHelper(std::ostream* fileOut)
+      : _fileOut(fileOut) {}
+    std::ostream* _fileOut = nullptr;
+    std::stringstream ss;
+  };
+
 private:
   ASTNode* astRoot;
   OutputFile* file;
@@ -166,8 +179,12 @@ private:
 
   std::stack<BlockScope> blockScopeStack;
 
+  bool _isOutputFlushed = true;
+  StreamHelper _output;
+  const std::function<void(const Data&)>& ready;
+
 public:
-  Generator(ASTNode* astRoot, std::string filepath);
+  Generator(const std::function<void(const Data&)>& ready, ASTNode* astRoot, std::string filepath);
   ~Generator();
 
   void generate();
@@ -211,6 +228,12 @@ public:
 
   void comment(const std::string& comment);
   void dumpRegisters(bool mismatchCheckOnly = false);
+
+  StreamHelper& output();
+  void flushOutput();
+
+  void enterNode(ASTNode* node, const std::string& commentName);
+  void exitNode(ASTNode* node, const std::string& commentName);
 };
 
 

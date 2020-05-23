@@ -9,8 +9,8 @@
 unsigned int bytesOf(DataType type) {
 //  return 8;
   switch (type) {
-    case DataType::U8: return 1;
-    case DataType::S8: return 1;
+    case DataType::INT: return 1;
+//    case DataType::S8: return 1;
 //    case DataType::U16: return 2;
 //    case DataType::S16: return 2;
 //    case DataType::U32: return 4;

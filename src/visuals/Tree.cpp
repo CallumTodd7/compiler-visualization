@@ -74,6 +74,7 @@ void TreeNode::addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
                      g->newText(font, buildColoredString(tagName, g)),
                      spacer,
                      g->newText(font, buildColoredString(colourName + " children", colour)),
+                     love::Optional(colour),
                  });
 
   auto textWidth = tags.back().getWidth() + nodeInnerPadding * 2;
@@ -89,7 +90,8 @@ void TreeNode::addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
                      tagName,
                      g->newText(font, buildColoredString(tagName, g)),
                      spacer,
-                     g->newText(valueFont, buildColoredString(value, g))
+                     g->newText(valueFont, buildColoredString(value, g)),
+                     love::Optional<love::Colorf>(),
                  });
 
   auto textWidth = tags.back().getWidth() + nodeInnerPadding * 2;
@@ -99,7 +101,16 @@ void TreeNode::addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
   size.y += tags.back().getHeight();
 }
 
-void TreeNode::setNodeType(love::graphics::Graphics* g, const std::string& newNodeType) {
+std::string TreeNode::getTagNameByColour(love::Colorf colour) {
+  for (auto& tag : tags) {
+    if (tag.colour.hasValue && tag.colour.value == colour) {
+      return tag.tagName;
+    }
+  }
+  return "";
+}
+
+bool TreeNode::setNodeType(love::graphics::Graphics* g, const std::string& newNodeType) {
   bool isFirst = nodeType == nullptr;
 
   nodeType = g->newText(font, buildColoredString(newNodeType, g));
@@ -111,6 +122,8 @@ void TreeNode::setNodeType(love::graphics::Graphics* g, const std::string& newNo
   if (isFirst) {
     size.y += font->getHeight() + nodeTypePadding;
   }
+
+  return !isFirst;
 }
 
 love::Rect intersectRects(love::Rect a, love::Rect b) {
@@ -179,6 +192,11 @@ void TreeNode::draw(love::graphics::Graphics* g,
     for (auto child : _children) {
       auto childNode = child.first;
       auto connectionColour = child.second;
+
+      if (childNode->hidden) {
+        continue;
+      }
+
       {
         g->setColor(connectionColour);
         std::vector<love::Vector2> lineVerts = {
@@ -255,6 +273,24 @@ void TreeNode::_updatePosition(love::Vector2 pos) {
   }
 }
 
+TreeNode* TreeNode::findNode(unsigned long targetNodeId) {
+  // Is this node?
+  if (nodeId == targetNodeId) {
+    return this;
+  }
+
+  // Is child node?
+  for (auto& child : _children) {
+    auto foundNode = child.first->findNode(targetNodeId);
+    if (foundNode) {
+      return foundNode;
+    }
+  }
+
+  // Not here
+  return nullptr;
+}
+
 Tree::~Tree() {
   if (txtSpacer) txtSpacer->release();
 }
@@ -264,11 +300,45 @@ void Tree::init(love::graphics::Graphics* g) {
 }
 
 void Tree::update(double dt) {
+  frameSize.update(dt);
   scrollManager.update(dt);
 }
 
 bool Tree::hasActiveAnimations() {
-  return false;//focusPoint.isActive();
+  return scrollManager.isActive();
+}
+
+void Tree::insertNodeBetweenChild(love::graphics::Graphics* g, const std::string& groupLabel, unsigned long childNodeId) {
+  if (selectedNode) {
+    selectedNode->hidden = false;
+
+    for (auto& child : selectedNode->_children) {
+      if (child.first->nodeId != childNodeId) continue;
+
+      auto childNode = child.first;
+      auto parentNode = selectedNode;
+
+      std::string parentChildNodeGroupLabel = parentNode->getTagNameByColour(child.second);
+
+      selectedNode = parentNode;
+      addNode(g, parentChildNodeGroupLabel);// Sets selectedNode
+      auto newNode = selectedNode;
+
+      childNode->_parent = newNode;
+      parentNode->_children.erase(
+          std::remove_if(parentNode->_children.begin(), parentNode->_children.end(), [childNode](auto child) {
+            return child.first == childNode;
+          }), parentNode->_children.end());
+
+      auto colour = nodeChildGroupColors[newNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
+      if (!newNode->hasTag(groupLabel)) {
+        newNode->_childGroupCount++;
+        colour = nodeChildGroupColors[newNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
+        newNode->addTag(g, txtSpacer, groupLabel, colour.second, colour.first);
+      }
+      newNode->_children.emplace_back(childNode, colour.first);
+    }
+  }
 }
 
 void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
@@ -279,6 +349,8 @@ void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
     selectedNode = node;
     return;
   }
+
+  selectedNode->hidden = false;
 
   // Add tag to parent node
   auto colour = nodeChildGroupColors[selectedNode->_childGroupCount % NODE_CHILD_GROUP_COLOURS_COUNT];
@@ -303,19 +375,49 @@ void Tree::addNode(love::graphics::Graphics* g, const std::string& groupLabel) {
 void Tree::addTagToNode(love::graphics::Graphics* g, const std::string& tagName, const std::string& value) {
   if (selectedNode) {
     selectedNode->addTag(g, txtSpacer, tagName, value);
+    selectedNode->hidden = false;
   }
 }
 
-void Tree::setNodeType(love::graphics::Graphics* g, const std::string& nodeType) {
+bool Tree::setNodeType(love::graphics::Graphics* g, const std::string& nodeType, unsigned long nodeId) {
+  bool didOverride = false;
   if (selectedNode) {
-    selectedNode->setNodeType(g, nodeType);
+    didOverride = selectedNode->setNodeType(g, nodeType);
+    selectedNode->hidden = false;
+    selectedNode->nodeId = nodeId;
   }
+  return didOverride;
 }
 
 void Tree::selectParentNode() {
   if (selectedNode && selectedNode->_parent) {
+    selectedNode->hidden = false;
     selectedNode = selectedNode->_parent;
   }
+}
+
+void Tree::selectNode(unsigned long nodeId) {
+  if (rootNode && nodeId > 0) {
+    auto foundNode = rootNode->findNode(nodeId);
+    if (foundNode) {
+      selectedNode = foundNode;
+    }
+  }
+}
+
+void Tree::hideSelected() {
+  if (selectedNode) {
+    selectedNode->hidden = true;
+  }
+}
+
+love::Vector2 Tree::getSelectedNodePosition() {
+  if (selectedNode) {
+    love::Vector2 scrollOffset = getScrollOffset();
+    return position + scrollOffset + padding + selectedNode->position + selectedNode->size / 2;
+  }
+
+  return love::Vector2();
 }
 
 void Tree::updateNodes() {
@@ -332,20 +434,16 @@ void Tree::draw(love::graphics::Graphics* g, int xScissorOffset) {
 
   love::Vector2 scrollOffset = getScrollOffset();
 
-  love::Vector2 centreOffset = {
-      0,//(frameSize.x - rootNode->size.x) / 2,
-      0
-  };
-
+  love::Vector2 frameSizeVec = frameSize.get();
   love::Rect scissorWindow = {
       (int) position.x + xScissorOffset, (int) position.y,
-      (int) frameSize.x, (int) frameSize.y
+      (int) frameSizeVec.x, (int) frameSizeVec.y
   };
 #ifndef SCISSOR_AT_NODE
   g->setScissor(scissorWindow);
 #endif
 
-  rootNode->draw(g, position + scrollOffset + centreOffset + padding, scissorWindow, xScissorOffset, selectedNode);
+  rootNode->draw(g, position + scrollOffset + padding, scissorWindow, xScissorOffset, selectedNode);
 
   g->setScissor();
 }
@@ -355,11 +453,13 @@ love::Vector2 Tree::getScrollOffset() {
     return {};
   }
 
-  love::Vector4 focusArea = {
-      selectedNode->position.x, selectedNode->position.y,
-      selectedNode->size.x, selectedNode->size.y
+  auto centerOffset = (selectedNode->collectiveRowSize.x + selectedNode->size.x) / 2;
+  if (centerOffset < 0) centerOffset = 0;
+  love::Vector2 focusPoint = {
+      selectedNode->position.x + centerOffset,
+      selectedNode->position.y
   };
   love::Vector4 framePadding = {30, 30, 30, 80};
 
-  return scrollManager.getOffset(frameSize, rootNode->_rootMaxContentSize, focusArea, framePadding);
+  return scrollManager.getOffset(frameSize.get(), rootNode->_rootMaxContentSize, focusPoint, framePadding);
 }

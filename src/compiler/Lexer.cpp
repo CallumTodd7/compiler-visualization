@@ -232,7 +232,14 @@ Token Lexer::nextToken() {
         });
 
   // Error
-  std::cout << lexerContext << " Lexer: Unknown character(s): " << currentChar << std::endl;
+  std::stringstream ssError;
+  ssError << lexerContext << " Lexer: Unknown character(s): " << currentChar;
+  std::cout << ssError.str() << std::endl;
+  ready({
+            .mode = Data::Mode::ERROR,
+            .type = Data::Type::MODE_CHANGE,
+            .string = ssError.str(),
+        });
   return Token::errorToken(lexerContext);
 }
 
@@ -355,7 +362,14 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
       return {lexerContext, Token::Type::TOKEN_INTEGER, 0};
     } else {
       // Error because there's no number here
-      std::cout << lexerContext << " Lexer: Number not zero and not 1-9. Huh?" << std::endl;
+      std::stringstream ssError;
+      ssError << lexerContext << " Lexer: Number not zero and not 1-9. Huh?";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       return Token::errorToken(lexerContext);
     }
   }
@@ -367,16 +381,44 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
 
   // Handle errors
   if (parsedNumber == 0) {
-    std::cout << lexerContext << " Lexer: Number not valid (prob internal?)." << std::endl;
+    std::stringstream ssError;
+    ssError << lexerContext << " Lexer: Number not valid (prob internal?).";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     return Token::errorToken(lexerContext);
   } else if (parsedNumber == LONG_MIN && errno == ERANGE) {
-    std::cout << lexerContext << " Lexer: Number out of range. Too low." << std::endl;
+    std::stringstream ssError;
+    ssError << lexerContext << " Lexer: Number out of range. Too low.";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     return Token::errorToken(lexerContext);
   } else if (parsedNumber == LONG_MAX && errno == ERANGE) {
-    std::cout << lexerContext << " Lexer: Number out of range. Too high." << std::endl;
+    std::stringstream ssError;
+    ssError << lexerContext << " Lexer: Number out of range. Too high.";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     return Token::errorToken(lexerContext);
   } else if (errno != 0) {
-    std::cout << lexerContext << " Lexer: Unknown error parsing number." << std::endl;
+    std::stringstream ssError;
+    ssError << lexerContext << " Lexer: Unknown error parsing number.";
+    std::cout << ssError.str() << std::endl;
+    ready({
+              .mode = Data::Mode::ERROR,
+              .type = Data::Type::MODE_CHANGE,
+              .string = ssError.str(),
+          });
     return Token::errorToken(lexerContext);
   }
 
@@ -395,14 +437,12 @@ Token Lexer::readNumber(const LexerContext& lexerContext) {
 }
 
 Token Lexer::identifyKeyword(const LexerContext& lexerContext, const std::string& keyword) {
-  if (keyword == "u8") {
-    return {lexerContext, Token::Type::TOKEN_KEYWORD_U8};
-  } else if (keyword == "s8") {
-    return {lexerContext, Token::Type::TOKEN_KEYWORD_S8};
+  if (keyword == "int") {
+    return {lexerContext, Token::Type::TOKEN_KEYWORD_INT};
   } else if (keyword == "void") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_VOID};
   } else if (keyword == "return") {
-    return {lexerContext, Token::Type::TOKEN_KEYWORD_RETURN};
+    //return {lexerContext, Token::Type::TOKEN_KEYWORD_RETURN};
   } else if (keyword == "continue") {
     return {lexerContext, Token::Type::TOKEN_KEYWORD_CONTINUE};
   } else if (keyword == "break") {
@@ -460,12 +500,12 @@ Token Lexer::readOperator(const LexerContext& lexerContext) {
     } else {
       return {lexerContext, Token::Type::TOKEN_LOGICAL_NOT}; // '!'
     }
-  } else if (firstChar == '&' && currentChar == '&') {
-    advanceCursor();
-    return {lexerContext, Token::Type::TOKEN_LOGICAL_AND}; // '&&'
-  } else if (firstChar == '|' && currentChar == '|') {
-    advanceCursor();
-    return {lexerContext, Token::Type::TOKEN_LOGICAL_OR}; // '||'
+//  } else if (firstChar == '&' && currentChar == '&') {
+//    advanceCursor();
+//    return {lexerContext, Token::Type::TOKEN_LOGICAL_AND}; // '&&'
+//  } else if (firstChar == '|' && currentChar == '|') {
+//    advanceCursor();
+//    return {lexerContext, Token::Type::TOKEN_LOGICAL_OR}; // '||'
   } else if (firstChar == '<') {
     if (currentChar == '=') {
       advanceCursor();

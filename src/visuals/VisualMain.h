@@ -19,6 +19,7 @@
 #include "Checklist.h"
 #include "TokenStream.h"
 #include "Tree.h"
+#include "Table.h"
 
 using love::graphics::opengl::Shader;
 using love::graphics::ShaderStage;
@@ -40,7 +41,7 @@ private:
   Window* window;
   love::font::freetype::Font* font;
 
-  love::graphics::Font* fontVeraRegular18 = nullptr;
+  love::graphics::Font* fontVeraRegular19 = nullptr;
   love::graphics::Font* fontSourceCodeProRegular20 = nullptr;
 
   bool shouldSkipToNextSection = false;
@@ -48,9 +49,14 @@ private:
   Data::Mode state = Data::Mode::START;
   Tween<float> horizontalOffset = Tween<float>(0);
   bool hasLexerSupport = false;
+  bool hasParserSupport = false;
 
   float titleHeight = 0;
   Text* txtTitle = nullptr;
+  Text* txtTimeText = nullptr;
+
+  bool showError = false;
+  Text* txtError = nullptr;
 
   HighlightableText sourceCode;
 
@@ -66,6 +72,12 @@ private:
 
   Tree tree;
 
+  Table tblRegisters;
+  Table tblLocations;
+  Table tblConstants;
+  std::vector<std::pair<love::Vector2, love::Vector2>> arrows;
+  HighlightableText instructionCode;
+
 public:
   VisualMain(ThreadSync* threadSync, Timer* timer);
   ~VisualMain();
@@ -80,6 +92,7 @@ public:
 
   void skipForwardOneStep();
   void skipToNextSection();
+  void setTimeText(const std::string& timeStr);
 private:
   void requestNextData();
 

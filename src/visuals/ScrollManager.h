@@ -25,19 +25,19 @@ public:
                           const love::Vector2& focusPoint,
                           const love::Vector4& framePadding = {}) {
     love::Vector2 newDesiredOffset = getDesiredOffset({
-                                                          frameSize.x - (framePadding.z),
-                                                          frameSize.y - (framePadding.w),
+                                                          frameSize.x - framePadding.z,
+                                                          frameSize.y - framePadding.w,
                                                       },
                                                       contentSize,
                                                       focusPoint,
-                                                      {framePadding.x, framePadding.x});
+                                                      {framePadding.x, framePadding.y});
 
     if (desiredOffset != newDesiredOffset) {
       desiredOffset = newDesiredOffset;
 
       scrollOffset
           .startAtCurrent({0, 0})
-          .goTo(desiredOffset, 1.0f)
+          .goTo(desiredOffset, 0.5)
           .finish();
     }
 
@@ -52,6 +52,10 @@ public:
     focusPoint.x += focusArea.z * (focusArea.x / (frameSize.x - focusArea.z));
     focusPoint.y += focusArea.w * (focusArea.y / (frameSize.y - focusArea.w));
     return getOffset(frameSize, contentSize, focusPoint, framePadding);
+  }
+
+  bool isActive() {
+    return scrollOffset.isActive();
   }
 
 private:

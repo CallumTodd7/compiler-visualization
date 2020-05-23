@@ -89,11 +89,8 @@ std::ostream& operator<<(std::ostream& os, const Token::Type& type) {
     case Token::Type::TOKEN_DOT:
       os << "DOT";
       break;
-    case Token::Type::TOKEN_KEYWORD_U8:
-      os << "KEYWORD_U8";
-      break;
-    case Token::Type::TOKEN_KEYWORD_S8:
-      os << "KEYWORD_S8";
+    case Token::Type::TOKEN_KEYWORD_INT:
+      os << "KEYWORD_INT";
       break;
     case Token::Type::TOKEN_KEYWORD_VOID:
       os << "KEYWORD_VOID";
@@ -260,11 +257,8 @@ std::ostream& operator<<(std::ostream& os, const DataType& dataType) {
     case DataType::VOID:
       os << "VOID";
       break;
-    case DataType::U8:
-      os << "U8";
-      break;
-    case DataType::S8:
-      os << "S8";
+    case DataType::INT:
+      os << "INT";
       break;
   }
   return os;

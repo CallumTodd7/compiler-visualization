@@ -1,15 +1,15 @@
 // Gen test
 
-u8 nothingFunc(u8 str) {
-  u8 n = 00121;
+int nothingFunc(int str) {
+  int n = 00121 + -5 + 5;
 }
 
-extern void printf(u8 fmt, u8 a)
-extern void puts(u8 str)
+extern void printf(void fmt, int a)
+extern void puts(void str)
 
 //*
-void dave(u8 a, u8 b) {
-  u8 c = b;
+void dave(int a, int b) {
+  int c = b;
   while (1) {
     if (c <= 0) {
       break;
@@ -35,12 +35,12 @@ void dave(u8 a, u8 b) {
 
 void main() {
   //*
-  u8 num = 1+2+3+4+5+6+7+8+9;
+  int num = 1+2+3+4+5+6+7+8+9;
   printf("num: %d\n", num);
-  u8 num2 = 10;
+  int num2 = 10;
   num = 7;
   {
-    u8 num3 = num + num2;
+    int num3 = num + num2;
     //printf("3x:\nnum: %d\nnum2: %d\nnum3: %d\n", num, num2, num3);
     printf("num: %d\n", num);
     printf("num2: %d\n", num2);

@@ -17,6 +17,7 @@ private:
 
   std::stack<ASTBlock*> blockScopeStack;
 
+  unsigned long currentNodeId = 0;
   const std::function<void(const Data&)>& ready;
 
 public:
@@ -56,7 +57,9 @@ private:
   ASTExpression* parseFactor();
 
   DataType parseTypeSpecifier();
-  static ExpressionOperatorType getOpFromToken(const Token* token);
+  ExpressionOperatorType getOpFromToken(const Token* token);
+  void binOpTemplate(ASTExpression*& node, const Token* opToken,
+                     const std::function<ASTExpression*()>& rightNode);
 };
 
 

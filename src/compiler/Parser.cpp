@@ -59,8 +59,15 @@ const Token* Parser::expect(Token::Type type) {
             .targetToken = type,
         });
 
-  std::cout << token->lexerContext
-            << " Parser: Unexpected token. Got " << token->type << ", expected " << type << "." << std::endl;
+  std::stringstream ssError;
+  ssError << token->lexerContext
+          << " Parser: Unexpected token. Got " << token->type << ", expected " << type << ".";
+  std::cout << ssError.str() << std::endl;
+  ready({
+            .mode = Data::Mode::ERROR,
+            .type = Data::Type::MODE_CHANGE,
+            .string = ssError.str(),
+        });
   throw std::exception();
 }
 
@@ -142,12 +149,14 @@ ASTBlock* Parser::parse() {
         });
 
   auto node = new ASTBlock();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
-  });
+        });
 
   node->parent = nullptr;
 
@@ -180,10 +189,12 @@ ASTBlock* Parser::parse() {
 
 ASTBlock* Parser::parseBlock() {
   auto node = new ASTBlock();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -216,10 +227,12 @@ ASTBlock* Parser::parseBlock() {
 
 ASTProcedure* Parser::parseProcedureDeclaration(bool isExternal) {
   auto node = new ASTProcedure();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -296,10 +309,12 @@ ASTProcedure* Parser::parseProcedureDeclaration(bool isExternal) {
 
 ASTVariableDeclaration* Parser::parseVariableDeclaration(bool declaratorOnly) {
   auto node = new ASTVariableDeclaration();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -350,10 +365,12 @@ ASTVariableDeclaration* Parser::parseVariableDeclaration(bool declaratorOnly) {
 
 ASTVariableAssignment* Parser::parseVariableAssignment() {
   auto node = new ASTVariableAssignment();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -393,10 +410,12 @@ ASTVariableAssignment* Parser::parseVariableAssignment() {
 
 ASTProcedureCall* Parser::parseProcedureCall() {
   auto node = new ASTProcedureCall();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -458,8 +477,7 @@ ASTStatement* Parser::parseStatement() {
     case Token::Type::TOKEN_KEYWORD_EXTERN:
       return parseProcedureDeclaration(true);
     case Token::Type::TOKEN_KEYWORD_VOID:
-    case Token::Type::TOKEN_KEYWORD_U8:
-    case Token::Type::TOKEN_KEYWORD_S8:
+    case Token::Type::TOKEN_KEYWORD_INT:
       return parseVariableDeclaration();
     case Token::Type::TOKEN_IDENTIFIER:
       if (peekToken()->type == Token::Type::TOKEN_PARENTHESIS_OPEN) {
@@ -468,17 +486,26 @@ ASTStatement* Parser::parseStatement() {
         return parseVariableAssignment();
       }
     default:
-      std::cout << token->lexerContext << " Parser: Expected statement, got " << *token << "." << std::endl;
+      std::stringstream ssError;
+      ssError << token->lexerContext << " Parser: Expected statement, got " << *token << ".";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       throw std::exception();
   }
 }
 
 ASTWhile* Parser::parseWhile() {
   auto node = new ASTWhile();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -516,10 +543,12 @@ ASTWhile* Parser::parseWhile() {
 
 ASTIf* Parser::parseIf() {
   auto node = new ASTIf();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -590,10 +619,12 @@ ASTIf* Parser::parseIf() {
 
 ASTContinue* Parser::parseContinue() {
   auto node = new ASTContinue();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -611,10 +642,12 @@ ASTContinue* Parser::parseContinue() {
 
 ASTBreak* Parser::parseBreak() {
   auto node = new ASTBreak();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -632,10 +665,12 @@ ASTBreak* Parser::parseBreak() {
 
 ASTReturn* Parser::parseReturn() {
   auto node = new ASTReturn();
+  node->nodeId = ++currentNodeId;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
             .nodeType = node->type,
+            .nodeId = currentNodeId,
             .parserState = Data::ParserState::START_NODE,
         });
 
@@ -660,12 +695,51 @@ ASTReturn* Parser::parseReturn() {
 }
 
 ASTExpression* Parser::parseExpression() {
+  return parseLogicalOrExp();
+}
+
+void Parser::binOpTemplate(ASTExpression*& node,
+                           const Token* opToken,
+                           const std::function<ASTExpression*()>& rightNode) {
+  auto newNode = new ASTBinOp();
+  newNode->nodeId = ++currentNodeId;
+  newNode->left = node;
   ready({
             .mode = Data::Mode::PARSER,
             .type = Data::Type::SPECIFIC,
+            .nodeType = newNode->type,
+            .nodeId = currentNodeId,
+            .parserState = Data::ParserState::INSERT_NODE_BETWEEN_CHILD,
+            .parserChildGroup = "left",
+            .childNodeId = node->nodeId,
+        });
+
+  newNode->op = getOpFromToken(opToken);
+  ready({
+            .mode = Data::Mode::PARSER,
+            .type = Data::Type::SPECIFIC,
+            .nodeType = newNode->type,
+            .parserState = Data::ParserState::PARAM,
+            .param = {"operator", (std::stringstream() << newNode->op).str()},
+        });
+
+  ready({
+            .mode = Data::Mode::PARSER,
+            .type = Data::Type::SPECIFIC,
+            .nodeType = newNode->type,
+            .parserState = Data::ParserState::ADD_CHILD,
+            .targetNodeType = ASTType::BLOCK,
+            .parserChildGroup = "right",
+        });
+  newNode->right = rightNode();
+
+  ready({
+            .mode = Data::Mode::PARSER,
+            .type = Data::Type::SPECIFIC,
+            .nodeType = newNode->type,
             .parserState = Data::ParserState::END_NODE,
         });
-  return parseLogicalOrExp();
+  node = newNode;
 }
 
 ASTExpression* Parser::parseLogicalOrExp() {
@@ -673,14 +747,7 @@ ASTExpression* Parser::parseLogicalOrExp() {
 
   const Token* opToken = nullptr;
   while ((opToken = accept(Token::Type::TOKEN_LOGICAL_OR))) {
-    auto rightNode = parseLogicalAndExp();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseLogicalAndExp(); });
   }
 
   return node;
@@ -691,14 +758,7 @@ ASTExpression* Parser::parseLogicalAndExp() {
 
   const Token* opToken = nullptr;
   while ((opToken = accept(Token::Type::TOKEN_LOGICAL_AND))) {
-    auto rightNode = parseEqualityExp();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseEqualityExp(); });
   }
 
   return node;
@@ -712,14 +772,7 @@ ASTExpression* Parser::parseEqualityExp() {
                                Token::Type::TOKEN_EQUALS,
                                Token::Type::TOKEN_NOT_EQUALS
                            }))) {
-    auto rightNode = parseRelationalExp();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseRelationalExp(); });
   }
 
   return node;
@@ -735,14 +788,7 @@ ASTExpression* Parser::parseRelationalExp() {
                                Token::Type::TOKEN_GREATER_THAN,
                                Token::Type::TOKEN_GREATER_THAN_OR_EQUAL,
                            }))) {
-    auto rightNode = parseAdditiveExp();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseAdditiveExp(); });
   }
 
   return node;
@@ -756,14 +802,7 @@ ASTExpression* Parser::parseAdditiveExp() {
                                Token::Type::TOKEN_ADD,
                                Token::Type::TOKEN_MINUS
                            }))) {
-    auto rightNode = parseTerm();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseTerm(); });
   }
 
   return node;
@@ -777,14 +816,7 @@ ASTExpression* Parser::parseTerm() {
                                Token::Type::TOKEN_MULTIPLY,
                                Token::Type::TOKEN_DIVIDE
                            }))) {
-    auto rightNode = parseUnaryFactor();
-
-    auto newNode = new ASTBinOp();
-    newNode->left = node;
-    newNode->op = getOpFromToken(opToken);
-    newNode->right = rightNode;
-
-    node = newNode;
+    binOpTemplate(node, opToken, [&]() { return parseUnaryFactor(); });
   }
 
   return node;
@@ -798,9 +830,39 @@ ASTExpression* Parser::parseUnaryFactor() {
                                 });
   if (opToken) {
     auto node = new ASTUnaryOp();
-    node->child = parseFactor();
-    node->op = getOpFromToken(opToken);
+    node->nodeId = ++currentNodeId;
+    ready({
+              .mode = Data::Mode::PARSER,
+              .type = Data::Type::SPECIFIC,
+              .nodeType = node->type,
+              .nodeId = currentNodeId,
+              .parserState = Data::ParserState::START_NODE,
+          });
 
+    node->op = getOpFromToken(opToken);
+    ready({
+              .mode = Data::Mode::PARSER,
+              .type = Data::Type::SPECIFIC,
+              .nodeType = node->type,
+              .parserState = Data::ParserState::PARAM,
+              .param = {"operator", (std::stringstream() << node->op).str()},
+          });
+
+    ready({
+              .mode = Data::Mode::PARSER,
+              .type = Data::Type::SPECIFIC,
+              .nodeType = node->type,
+              .parserState = Data::ParserState::ADD_CHILD,
+              .parserChildGroup = "child expression",
+          });
+    node->child = parseFactor();
+
+    ready({
+              .mode = Data::Mode::PARSER,
+              .type = Data::Type::SPECIFIC,
+              .nodeType = node->type,
+              .parserState = Data::ParserState::END_NODE,
+          });
     return node;
   }
 
@@ -822,23 +884,57 @@ ASTExpression* Parser::parseFactor() {
       if (peekToken()->type == Token::Type::TOKEN_PARENTHESIS_OPEN) {
         // Proc call
 
-        std::cout << peekedToken->lexerContext
-                  << " Parser: procedure calls are not implemented yet" << std::endl;
+        std::stringstream ssError;
+        ssError << peekedToken->lexerContext << " Parser: procedure calls are not implemented yet";
+        std::cout << ssError.str() << std::endl;
+        ready({
+                  .mode = Data::Mode::ERROR,
+                  .type = Data::Type::MODE_CHANGE,
+                  .string = ssError.str(),
+              });
         throw std::exception();
       } else {
         // Ident
 
         auto token = expect(Token::Type::TOKEN_IDENTIFIER);
         if (token->valueType != Token::ValueType::STRING) {
-          std::cout << token->lexerContext
-                    << " Parser: variable identifier cannot be an integer" << std::endl;
+          std::stringstream ssError;
+          ssError << peekedToken->lexerContext << " Parser: variable identifier cannot be an integer";
+          std::cout << ssError.str() << std::endl;
+          ready({
+                    .mode = Data::Mode::ERROR,
+                    .type = Data::Type::MODE_CHANGE,
+                    .string = ssError.str(),
+                });
           throw std::exception();
         }
 
         auto node = new ASTVariableIdent();
+        node->nodeId = ++currentNodeId;
+        ready({
+                  .mode = Data::Mode::PARSER,
+                  .type = Data::Type::SPECIFIC,
+                  .nodeType = node->type,
+                  .nodeId = currentNodeId,
+                  .parserState = Data::ParserState::START_NODE,
+              });
+
         node->ident = std::string(token->value.stringValue.data,
                                   token->value.stringValue.count);//TODO use atom
+        ready({
+                  .mode = Data::Mode::PARSER,
+                  .type = Data::Type::SPECIFIC,
+                  .nodeType = node->type,
+                  .parserState = Data::ParserState::PARAM,
+                  .param = {"identifier", node->ident},
+              });
 
+        ready({
+                  .mode = Data::Mode::PARSER,
+                  .type = Data::Type::SPECIFIC,
+                  .nodeType = node->type,
+                  .parserState = Data::ParserState::END_NODE,
+              });
         return node;
       }
     }
@@ -846,22 +942,92 @@ ASTExpression* Parser::parseFactor() {
       auto token = expect(Token::Type::TOKEN_INTEGER);
 
       auto node = new ASTLiteral();
+      node->nodeId = ++currentNodeId;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .nodeId = currentNodeId,
+                .parserState = Data::ParserState::START_NODE,
+            });
+
       node->valueType = ASTLiteral::ValueType::INTEGER;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::PARAM,
+                .param = {"value type", "INTEGER"},
+            });
       node->value.integerData = token->value.integerValue;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::PARAM,
+                .param = {"value", (std::stringstream() << node->value.integerData).str()},
+            });
+
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::END_NODE,
+            });
       return node;
     }
     case Token::Type::TOKEN_STRING: {
       auto token = expect(Token::Type::TOKEN_STRING);
 
       auto node = new ASTLiteral();
+      node->nodeId = ++currentNodeId;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .nodeId = currentNodeId,
+                .parserState = Data::ParserState::START_NODE,
+            });
+
       node->valueType = ASTLiteral::ValueType::STRING;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::PARAM,
+                .param = {"value type", "STRING"},
+            });
       // TODO cleanup
       node->value.stringData.count = token->value.stringValue.count;
       node->value.stringData.data = token->value.stringValue.data;
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::PARAM,
+                .param = {
+                    "value",
+                    std::string(token->value.stringValue.data, token->value.stringValue.count)
+                },
+            });
+
+      ready({
+                .mode = Data::Mode::PARSER,
+                .type = Data::Type::SPECIFIC,
+                .nodeType = node->type,
+                .parserState = Data::ParserState::END_NODE,
+            });
       return node;
     }
     default: {
-      std::cout << *peekedToken << " Parser: Is not valid factor" << std::endl;
+      std::stringstream ssError;
+      ssError << *peekedToken << " Parser: Is not valid factor";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       throw std::exception();
     }
   }
@@ -870,15 +1036,20 @@ ASTExpression* Parser::parseFactor() {
 DataType Parser::parseTypeSpecifier() {
   if (accept(Token::Type::TOKEN_KEYWORD_VOID)) {
     return DataType::VOID;
-  } else if (accept(Token::Type::TOKEN_KEYWORD_U8)) {
-    return DataType::U8;
-  } else if (accept(Token::Type::TOKEN_KEYWORD_S8)) {
-    return DataType::S8;
+  } else if (accept(Token::Type::TOKEN_KEYWORD_INT)) {
+    return DataType::INT;
   }
 
   auto token = currentToken();
-  std::cout << token->lexerContext
-            << " Parser: Unexpected token. Got " << token->type << ", expected a type specifier." << std::endl;
+
+  std::stringstream ssError;
+  ssError << token->lexerContext << " Parser: Unexpected token. Got " << token->type << ", expected a type specifier.";
+  std::cout << ssError.str() << std::endl;
+  ready({
+            .mode = Data::Mode::ERROR,
+            .type = Data::Type::MODE_CHANGE,
+            .string = ssError.str(),
+        });
   throw std::exception();
 }
 
@@ -911,7 +1082,14 @@ ExpressionOperatorType Parser::getOpFromToken(const Token* token) {
     case Token::Type::TOKEN_GREATER_THAN_OR_EQUAL:
       return ExpressionOperatorType::GREATER_THAN_OR_EQUAL;
     default:
-      std::cout << token->lexerContext << " Parser: Token (" << *token << ") is not an op token." << std::endl;
+      std::stringstream ssError;
+      ssError << token->lexerContext << " Parser: Token (" << *token << ") is not an op token.";
+      std::cout << ssError.str() << std::endl;
+      ready({
+                .mode = Data::Mode::ERROR,
+                .type = Data::Type::MODE_CHANGE,
+                .string = ssError.str(),
+            });
       throw std::exception();
   }
 }

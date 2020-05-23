@@ -19,14 +19,14 @@ private:
   love::graphics::Text* txtValue;
 
 public:
-  love::Vector2 position;
-
-public:
-  VisualToken(const std::string& tokenType, const std::string& value, const love::Vector2& position,
+  VisualToken(const std::string& tokenType, const std::string& value,
               love::graphics::Font* tokenTypeFont = nullptr, love::graphics::Font* valueFont = nullptr);
   ~VisualToken();
 
-  void draw(love::graphics::Graphics* g, const love::Vector2& pos, int xScissorOffset);
+  void draw(love::graphics::Graphics* g,
+            const love::Vector2& pos,
+            int xScissorOffset,
+            love::Colorf lineColour);
 };
 
 class TokenStream {
@@ -42,6 +42,7 @@ public:
   static float tokenPadding;
 
   Tween<float> verticalFocusPoint = Tween<float>(1.0);
+  Tween<float> hideTokenCount = Tween<float>(0.0);
 
   love::Vector2 position = {0, 0};
   love::Vector2 frameSize = {0, 0};
@@ -50,8 +51,11 @@ public:
   love::graphics::Font* tokenTypeFont = nullptr;
   love::graphics::Font* valueFont = nullptr;
 
+  bool highlightEnabled = false;
+
 public:
   void add(const love::Vector2& startPosition, const std::string& tokenType, const std::string& value = "");
+  void pop(int newHideTokenCount = -1);
 
   void update(double dt);
   void draw(love::graphics::Graphics* g, int xScissorOffset);
@@ -59,12 +63,12 @@ public:
   bool hasActiveAnimations();
 
 private:
-  love::Vector2 getTheoreticalPositionOf(unsigned int index) {
+  love::Vector2 getPositionOf(unsigned int index) {
     return {0, (60.0f) * (float) index};
   }
 
   love::Vector2 getNextPosition() {
-    return getTheoreticalPositionOf(tokens.size());
+    return getPositionOf(tokens.size());
   }
 
   love::Vector2 getScrollOffset();

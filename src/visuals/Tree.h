@@ -21,6 +21,7 @@ private:
     love::graphics::Text* txtTagName;
     love::graphics::Text* txtSpacer;
     love::graphics::Text* txtValue;
+    love::Optional<love::Colorf> colour;
 
     float getWidth();
     float getHeight();
@@ -47,6 +48,8 @@ public:
   love::Vector2 size = {nodeInnerPadding * 2, nodeInnerPadding * 2};
   love::Vector2 collectiveRowSize;
 
+  bool hidden = false;
+
   love::Vector2 _rootMaxContentSize;
 
   TreeNode* _root = nullptr;
@@ -54,6 +57,8 @@ public:
   std::vector<std::pair<TreeNode*, love::Colorf>> _children;
 
   int _childGroupCount = -1;
+
+  unsigned long nodeId = 0;
 
 public:
   explicit TreeNode(love::graphics::Graphics* g,
@@ -65,7 +70,8 @@ public:
               const std::string& tagName, const std::string& colourName, love::Colorf colour);
   void addTag(love::graphics::Graphics* g, love::graphics::Text* spacer,
               const std::string& tagName, const std::string& value);
-  void setNodeType(love::graphics::Graphics* g, const std::string& newNodeType);
+  std::string getTagNameByColour(love::Colorf colour);
+  bool setNodeType(love::graphics::Graphics* g, const std::string& newNodeType);
 
   void draw(love::graphics::Graphics* g,
             const love::Vector2& offset,
@@ -75,6 +81,8 @@ public:
 
   void _recalculateCollectiveSize();
   void _updatePosition(love::Vector2 pos = {});
+
+  TreeNode* findNode(unsigned long targetNodeId);
 };
 
 class Tree {
@@ -88,21 +96,26 @@ private:
 
 public:
   love::Vector2 position = {0, 0};
-  love::Vector2 frameSize = {0, 0};
+  Tween<love::Vector2> frameSize;
   love::Vector2 padding = {0, 0};
 
   love::graphics::Font* font = nullptr;
   love::graphics::Font* valueFont = nullptr;
 
+  love::Vector2 getSelectedNodePosition();
 public:
   ~Tree();
 
   void init(love::graphics::Graphics* g);
 
   void addNode(love::graphics::Graphics* g, const std::string& groupLabel);
+  void insertNodeBetweenChild(love::graphics::Graphics* g, const std::string& groupLabel, unsigned long childNodeId);
   void addTagToNode(love::graphics::Graphics* g, const std::string& tagName, const std::string& value);
-  void setNodeType(love::graphics::Graphics* g, const std::string& nodeType);
+  bool setNodeType(love::graphics::Graphics* g, const std::string& nodeType, unsigned long nodeId);
   void selectParentNode();
+  void selectNode(unsigned long nodeId);
+  void hideSelected();
+
   void updateNodes();
 
   void update(double dt);

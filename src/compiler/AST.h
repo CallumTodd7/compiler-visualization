@@ -50,6 +50,8 @@ std::ostream& operator<<(std::ostream& os, const ASTType& type);
 struct ASTNode {
   ASTType type = ASTType::UNINITIALISED;
 
+  unsigned long nodeId = 0;
+
   virtual void print(std::ostream& os, unsigned int level) const;
   friend std::ostream& operator<<(std::ostream& os, const ASTNode& node);
 };
