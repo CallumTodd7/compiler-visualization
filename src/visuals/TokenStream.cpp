@@ -102,7 +102,7 @@ void TokenStream::draw(love::graphics::Graphics* g, int xScissorOffset) {
   for (size_t i = startIndexLow > 0 ? startIndexLow - 1 : 0; i < tokens.size(); ++i) {
     if (i == tokens.size() - 1 && tokenInFlightPosition.isActive()) {
       g->setScissor();
-      tokens[0]->draw(g, tokenInFlightPosition.get(), xScissorOffset, g->getColor());
+      tokens[i]->draw(g, tokenInFlightPosition.get(), xScissorOffset, g->getColor());
     } else {
       g->setScissor({
                         (int) position.x + xScissorOffset, (int) position.y,
